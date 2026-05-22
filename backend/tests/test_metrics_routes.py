@@ -33,3 +33,12 @@ def test_metrics_view_serves_html():
     assert "Training Loss" in response.text
     assert "/api/jobs/job_001/metrics" in response.text
 
+
+def test_metrics_view_includes_axis_labels():
+    response = TestClient(app).get("/jobs/job_001/metrics-view")
+
+    assert response.status_code == 200
+    assert "Step" in response.text
+    assert "Loss" in response.text
+    assert "xTicks" in response.text
+    assert "yTicks" in response.text

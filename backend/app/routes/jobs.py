@@ -74,6 +74,19 @@ def get_job_metrics_view(job_id: str) -> str:
       stroke: #465062;
       stroke-width: 1;
     }}
+    .tick {{
+      stroke: #465062;
+      stroke-width: 1;
+    }}
+    .tick-label {{
+      fill: #aeb7c6;
+      font-size: 12px;
+    }}
+    .axis-label {{
+      fill: #d4dae5;
+      font-size: 13px;
+      font-weight: 650;
+    }}
     .grid {{
       stroke: #27303d;
       stroke-width: 1;
@@ -121,7 +134,7 @@ def get_job_metrics_view(job_id: str) -> str:
 
       const width = 1000;
       const height = 420;
-      const pad = {{ left: 54, right: 20, top: 24, bottom: 38 }};
+      const pad = {{ left: 72, right: 28, top: 28, bottom: 58 }};
       const xs = points.map(p => p.step);
       const ys = points.map(p => p.loss);
       const minX = Math.min(...xs);
@@ -133,14 +146,34 @@ def get_job_metrics_view(job_id: str) -> str:
       const x = value => pad.left + ((value - minX) / rangeX) * (width - pad.left - pad.right);
       const y = value => height - pad.bottom - ((value - minY) / rangeY) * (height - pad.top - pad.bottom);
       const path = points.map((p, i) => `${{i ? "L" : "M"}} ${{x(p.step).toFixed(2)}} ${{y(p.loss).toFixed(2)}}`).join(" ");
-      const grid = [0, 1, 2, 3, 4].map(i => {{
-        const gy = pad.top + i * ((height - pad.top - pad.bottom) / 4);
-        return `<line class="grid" x1="${{pad.left}}" y1="${{gy}}" x2="${{width - pad.right}}" y2="${{gy}}" />`;
+      const xTicks = [0, 1, 2, 3, 4].map(i => Math.round(minX + (i / 4) * rangeX));
+      const yTicks = [0, 1, 2, 3, 4].map(i => maxY - (i / 4) * rangeY);
+      const grid = yTicks.map(value => {{
+        const gy = y(value);
+        return `<line class="grid" x1="${{pad.left}}" y1="${{gy.toFixed(2)}}" x2="${{width - pad.right}}" y2="${{gy.toFixed(2)}}" />`;
+      }}).join("");
+      const xAxisTicks = xTicks.map(value => {{
+        const tx = x(value);
+        return `<g>
+          <line class="tick" x1="${{tx.toFixed(2)}}" y1="${{height - pad.bottom}}" x2="${{tx.toFixed(2)}}" y2="${{height - pad.bottom + 6}}" />
+          <text class="tick-label" x="${{tx.toFixed(2)}}" y="${{height - pad.bottom + 22}}" text-anchor="middle">${{value}}</text>
+        </g>`;
+      }}).join("");
+      const yAxisTicks = yTicks.map(value => {{
+        const ty = y(value);
+        return `<g>
+          <line class="tick" x1="${{pad.left - 6}}" y1="${{ty.toFixed(2)}}" x2="${{pad.left}}" y2="${{ty.toFixed(2)}}" />
+          <text class="tick-label" x="${{pad.left - 10}}" y="${{(ty + 4).toFixed(2)}}" text-anchor="end">${{formatLoss(value)}}</text>
+        </g>`;
       }}).join("");
       chart.innerHTML = `<svg viewBox="0 0 ${{width}} ${{height}}" preserveAspectRatio="none">
         ${{grid}}
         <line class="axis" x1="${{pad.left}}" y1="${{height - pad.bottom}}" x2="${{width - pad.right}}" y2="${{height - pad.bottom}}" />
         <line class="axis" x1="${{pad.left}}" y1="${{pad.top}}" x2="${{pad.left}}" y2="${{height - pad.bottom}}" />
+        ${{xAxisTicks}}
+        ${{yAxisTicks}}
+        <text class="axis-label" x="${{(pad.left + width - pad.right) / 2}}" y="${{height - 14}}" text-anchor="middle">Step</text>
+        <text class="axis-label" transform="translate(18 ${{(pad.top + height - pad.bottom) / 2}}) rotate(-90)" text-anchor="middle">Loss</text>
         <path class="line" d="${{path}}" />
       </svg>`;
     }}
@@ -159,4 +192,3 @@ def get_job_metrics_view(job_id: str) -> str:
   </script>
 </body>
 </html>"""
-
