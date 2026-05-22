@@ -46,28 +46,43 @@ function Invoke-LoggedCommand {
 
     "COMMAND: $($Command -join ' ')" | Set-Content -Path $LogPath
 
-    $stdoutPath = [System.IO.Path]::GetTempFileName()
-    $stderrPath = [System.IO.Path]::GetTempFileName()
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo.FileName = $Command[0]
+    if ($Command.Count -gt 1) {
+        foreach ($argument in $Command[1..($Command.Count - 1)]) {
+            $process.StartInfo.ArgumentList.Add($argument)
+        }
+    }
+    $process.StartInfo.WorkingDirectory = $WorkingDirectory
+    $process.StartInfo.UseShellExecute = $false
+    $process.StartInfo.RedirectStandardOutput = $true
+    $process.StartInfo.RedirectStandardError = $true
+    $process.StartInfo.CreateNoWindow = $true
 
-    $process = Start-Process `
-        -FilePath $Command[0] `
-        -ArgumentList $Command[1..($Command.Count - 1)] `
-        -WorkingDirectory $WorkingDirectory `
-        -NoNewWindow `
-        -Wait `
-        -PassThru `
-        -RedirectStandardOutput $stdoutPath `
-        -RedirectStandardError $stderrPath
-
-    if (Test-Path $stdoutPath) {
-        Get-Content $stdoutPath | Add-Content -Path $LogPath
-        Remove-Item $stdoutPath -Force
+    $outputHandler = [System.Diagnostics.DataReceivedEventHandler] {
+        param($sender, $event)
+        if ($null -ne $event.Data) {
+            Add-Content -Path $LogPath -Value $event.Data
+        }
+    }
+    $errorHandler = [System.Diagnostics.DataReceivedEventHandler] {
+        param($sender, $event)
+        if ($null -ne $event.Data) {
+            Add-Content -Path $LogPath -Value $event.Data
+        }
     }
 
-    if (Test-Path $stderrPath) {
-        Get-Content $stderrPath | Add-Content -Path $LogPath
-        Remove-Item $stderrPath -Force
+    $process.add_OutputDataReceived($outputHandler)
+    $process.add_ErrorDataReceived($errorHandler)
+
+    if (!$process.Start()) {
+        throw "Failed to start command: $($Command -join ' ')"
     }
+    $process.BeginOutputReadLine()
+    $process.BeginErrorReadLine()
+    $process.WaitForExit()
+    $process.CancelOutputRead()
+    $process.CancelErrorRead()
 
     if ($process.ExitCode -ne 0) {
         throw "Command failed with exit code $($process.ExitCode): $($Command -join ' ')"
