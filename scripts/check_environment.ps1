@@ -49,6 +49,7 @@ $checks = @(
             "$repoRoot\tools\opensplat\opensplat.exe",
             "$localToolsRoot\opensplat\opensplat.exe"
         )
+        DockerImage = "opensplat-cpu:local"
     }
 )
 
@@ -62,6 +63,15 @@ foreach ($check in $checks) {
     try {
         $executable = Find-Executable -Command $command -FallbackPaths $fallbackPaths
         if (-not $executable) {
+            if ($check.ContainsKey("DockerImage")) {
+                $imageName = [string]$check.DockerImage
+                $dockerImageId = docker image ls $imageName --quiet 2>$null
+                if ($LASTEXITCODE -eq 0 -and $dockerImageId) {
+                    Write-Host "[OK] $($check.Name) via Docker image $imageName"
+                    continue
+                }
+            }
+
             throw "Executable not found"
         }
 
