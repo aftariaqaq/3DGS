@@ -3,7 +3,9 @@ param(
     [string]$JobId = "job_test_001",
     [int]$Fps = 1,
     [int]$MaxFrames = 80,
-    [int]$Iterations = 500
+    [int]$Iterations = 500,
+    [int]$OpenSplatDownscaleFactor = 1,
+    [int]$OpenSplatNumDownscales = 2
 )
 
 Set-StrictMode -Version Latest
@@ -106,6 +108,14 @@ if ($Iterations -lt 1) {
     throw "Iterations must be >= 1"
 }
 
+if ($OpenSplatDownscaleFactor -lt 1) {
+    throw "OpenSplatDownscaleFactor must be >= 1"
+}
+
+if ($OpenSplatNumDownscales -lt 0) {
+    throw "OpenSplatNumDownscales must be >= 0"
+}
+
 $ffmpeg = Find-Executable `
     -Command "ffmpeg" `
     -FallbackPaths @(
@@ -183,6 +193,8 @@ Invoke-LoggedCommand `
         "opensplat-cpu:local",
         "--cpu",
         "-n", "$Iterations",
+        "--downscale-factor", "$OpenSplatDownscaleFactor",
+        "--num-downscales", "$OpenSplatNumDownscales",
         "-o", "/work/opensplat/splat.ply",
         "--colmap-image-path", "/work/images",
         "/work/colmap"
