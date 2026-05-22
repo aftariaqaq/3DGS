@@ -6,7 +6,7 @@
 
 **Architecture:** Use a local single-machine pipeline with explicit job directories and JSON metadata. The backend wraps external command-line tools, records stage logs, exposes job/scene APIs, and serves generated model files; the frontend uploads videos, polls job status, shows logs, and embeds a Gaussian Splat viewer for the final scene.
 
-**Tech Stack:** PowerShell, FFmpeg, COLMAP, OpenSplat, FastAPI, Python subprocess, JSON file storage, React, Vite, Three.js, GaussianSplats3D.
+**Tech Stack:** PowerShell, FFmpeg, COLMAP, OpenSplat CPU Docker image or native OpenSplat executable, FastAPI, Python subprocess, JSON file storage, React, Vite, Three.js, GaussianSplats3D.
 
 ---
 
@@ -108,7 +108,11 @@ D:\.codex_workplace\3DGS\
 
   scripts\
     check_environment.ps1
+    build_opensplat_cpu_docker.ps1
     run_pipeline_test.ps1
+
+  docker\
+    opensplat-cpu.Dockerfile
 
   data\
     jobs\
@@ -118,6 +122,7 @@ D:\.codex_workplace\3DGS\
 Responsibilities:
 
 - `scripts/check_environment.ps1`: Verify local tool availability.
+- `scripts/build_opensplat_cpu_docker.ps1`: Build the local `opensplat-cpu:local` image when no native Windows OpenSplat executable is available.
 - `scripts/run_pipeline_test.ps1`: Run the pipeline without backend/frontend.
 - `backend/app/config.py`: Central paths and command names.
 - `backend/app/models.py`: Pydantic models and status constants.
@@ -367,6 +372,28 @@ git commit -m "chore: add environment check script"
 **Files:**
 
 - Create: `D:\.codex_workplace\3DGS\scripts\run_pipeline_test.ps1`
+- Create if needed: `D:\.codex_workplace\3DGS\docker\opensplat-cpu.Dockerfile`
+- Create if needed: `D:\.codex_workplace\3DGS\scripts\build_opensplat_cpu_docker.ps1`
+
+- [ ] **Step 0: Provide OpenSplat on CPU-only Windows**
+
+If `opensplat.exe` is not available, build a Docker image:
+
+```powershell
+.\scripts\build_opensplat_cpu_docker.ps1
+```
+
+Expected:
+
+```text
+opensplat-cpu:local
+```
+
+The pipeline may then run OpenSplat via:
+
+```powershell
+docker run --rm -v "{jobRoot}:/work" opensplat-cpu:local --cpu -n {Iterations} -o /work/opensplat/splat.ply /work
+```
 
 - [ ] **Step 1: Write script parameters**
 
@@ -471,7 +498,7 @@ data/jobs/{JobId}/logs/colmap_mapping.log
 
 - [ ] **Step 9: Run OpenSplat**
 
-First try:
+If a native executable is available, first try:
 
 ```powershell
 opensplat.exe data/jobs/{JobId} -n {Iterations}
@@ -487,6 +514,18 @@ Write output to:
 
 ```text
 data/jobs/{JobId}/logs/opensplat.log
+```
+
+If using the CPU Docker image, run:
+
+```powershell
+docker run --rm `
+  -v "data/jobs/{JobId}:/work" `
+  opensplat-cpu:local `
+  --cpu `
+  -n {Iterations} `
+  -o /work/opensplat/splat.ply `
+  /work
 ```
 
 - [ ] **Step 10: Verify output**
@@ -1485,4 +1524,3 @@ Plan complete when this document is reviewed. Recommended execution order:
 2. Task 4-10 next, to wrap the working command-line pipeline in a backend.
 3. Task 11-15 next, to build the Web upload/status/viewer experience.
 4. Task 16 last, to verify the complete user-facing loop.
-
