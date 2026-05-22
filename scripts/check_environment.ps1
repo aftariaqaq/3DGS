@@ -1,21 +1,54 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+$localToolsRoot = "D:\.codex_tools"
+
+function Find-Executable {
+    param(
+        [Parameter(Mandatory = $true)][string]$Command,
+        [string[]]$FallbackPaths = @()
+    )
+
+    $fromPath = Get-Command $Command -ErrorAction SilentlyContinue
+    if ($fromPath) {
+        return $fromPath.Source
+    }
+
+    foreach ($path in $FallbackPaths) {
+        if (Test-Path $path) {
+            return (Resolve-Path $path).Path
+        }
+    }
+
+    return $null
+}
+
 $checks = @(
     @{
         Name = "ffmpeg"
         Command = "ffmpeg"
         Arguments = @("-version")
+        FallbackPaths = @(
+            "C:\Users\Administrator\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg.Essentials_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-essentials_build\bin\ffmpeg.exe"
+        )
     },
     @{
         Name = "colmap"
         Command = "colmap"
         Arguments = @("-h")
+        FallbackPaths = @(
+            "$localToolsRoot\colmap-x64-windows-nocuda\bin\colmap.exe"
+        )
     },
     @{
         Name = "opensplat"
         Command = "opensplat.exe"
         Arguments = @("--help")
+        FallbackPaths = @(
+            "$repoRoot\tools\opensplat\opensplat.exe",
+            "$localToolsRoot\opensplat\opensplat.exe"
+        )
     }
 )
 
@@ -24,11 +57,16 @@ $failed = $false
 foreach ($check in $checks) {
     $command = [string]$check.Command
     $arguments = [string[]]$check.Arguments
+    $fallbackPaths = [string[]]$check.FallbackPaths
 
     try {
-        $executable = Get-Command $command -ErrorAction Stop
+        $executable = Find-Executable -Command $command -FallbackPaths $fallbackPaths
+        if (-not $executable) {
+            throw "Executable not found"
+        }
+
         $process = Start-Process `
-            -FilePath $executable.Source `
+            -FilePath $executable `
             -ArgumentList $arguments `
             -NoNewWindow `
             -Wait `
@@ -53,4 +91,3 @@ foreach ($check in $checks) {
 if ($failed) {
     exit 1
 }
-
