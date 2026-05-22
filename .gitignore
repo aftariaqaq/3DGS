@@ -1,6 +1,7 @@
 .worktrees/
 worktrees/
 data/
+test_video/
 backend/.venv/
 backend/__pycache__/
 backend/app/__pycache__/
