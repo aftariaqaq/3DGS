@@ -147,7 +147,9 @@ Invoke-LoggedCommand `
         $colmap,
         "feature_extractor",
         "--database_path", (Join-Path $colmapDir "database.db"),
-        "--image_path", $imagesDir
+        "--image_path", $imagesDir,
+        "--FeatureExtraction.use_gpu", "0",
+        "--FeatureExtraction.max_image_size", "1600"
     ) `
     -LogPath (Join-Path $logsDir "colmap_features.log")
 
@@ -155,7 +157,9 @@ Invoke-LoggedCommand `
     -Command @(
         $colmap,
         "sequential_matcher",
-        "--database_path", (Join-Path $colmapDir "database.db")
+        "--database_path", (Join-Path $colmapDir "database.db"),
+        "--FeatureMatching.use_gpu", "0",
+        "--SiftMatching.cpu_brute_force_matcher", "1"
     ) `
     -LogPath (Join-Path $logsDir "colmap_matching.log")
 
@@ -180,7 +184,8 @@ Invoke-LoggedCommand `
         "--cpu",
         "-n", "$Iterations",
         "-o", "/work/opensplat/splat.ply",
-        "/work"
+        "--colmap-image-path", "/work/images",
+        "/work/colmap"
     ) `
     -LogPath (Join-Path $logsDir "opensplat.log")
 
