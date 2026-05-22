@@ -34,44 +34,6 @@ function Find-Executable {
     throw "Required command not found: $Command"
 }
 
-function ConvertTo-ProcessArgument {
-    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Argument)
-
-    if ($Argument -notmatch '[\s"]') {
-        return $Argument
-    }
-
-    $builder = [System.Text.StringBuilder]::new()
-    [void]$builder.Append('"')
-    $backslashes = 0
-    foreach ($character in $Argument.ToCharArray()) {
-        if ($character -eq '\') {
-            $backslashes += 1
-            continue
-        }
-
-        if ($character -eq '"') {
-            [void]$builder.Append('\' * (($backslashes * 2) + 1))
-            [void]$builder.Append('"')
-            $backslashes = 0
-            continue
-        }
-
-        if ($backslashes -gt 0) {
-            [void]$builder.Append('\' * $backslashes)
-            $backslashes = 0
-        }
-        [void]$builder.Append($character)
-    }
-
-    if ($backslashes -gt 0) {
-        [void]$builder.Append('\' * ($backslashes * 2))
-    }
-    [void]$builder.Append('"')
-
-    return $builder.ToString()
-}
-
 function Invoke-LoggedCommand {
     param(
         [Parameter(Mandatory = $true)][string[]]$Command,
@@ -84,44 +46,27 @@ function Invoke-LoggedCommand {
 
     "COMMAND: $($Command -join ' ')" | Set-Content -Path $LogPath
 
-    $process = [System.Diagnostics.Process]::new()
-    $process.StartInfo.FileName = $Command[0]
+    $executable = $Command[0]
+    $arguments = @()
     if ($Command.Count -gt 1) {
-        $process.StartInfo.Arguments = (($Command[1..($Command.Count - 1)] | ForEach-Object { ConvertTo-ProcessArgument $_ }) -join " ")
+        $arguments = @($Command[1..($Command.Count - 1)])
     }
-    $process.StartInfo.WorkingDirectory = $WorkingDirectory
-    $process.StartInfo.UseShellExecute = $false
-    $process.StartInfo.RedirectStandardOutput = $true
-    $process.StartInfo.RedirectStandardError = $true
-    $process.StartInfo.CreateNoWindow = $true
 
-    $outputHandler = [System.Diagnostics.DataReceivedEventHandler] {
-        param($sender, $event)
-        if ($null -ne $event.Data) {
-            Add-Content -Path $LogPath -Value $event.Data
+    Push-Location $WorkingDirectory
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & $executable @arguments 2>&1 | ForEach-Object {
+            Add-Content -Path $LogPath -Value $_.ToString()
         }
-    }
-    $errorHandler = [System.Diagnostics.DataReceivedEventHandler] {
-        param($sender, $event)
-        if ($null -ne $event.Data) {
-            Add-Content -Path $LogPath -Value $event.Data
-        }
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+        Pop-Location
     }
 
-    $process.add_OutputDataReceived($outputHandler)
-    $process.add_ErrorDataReceived($errorHandler)
-
-    if (!$process.Start()) {
-        throw "Failed to start command: $($Command -join ' ')"
-    }
-    $process.BeginOutputReadLine()
-    $process.BeginErrorReadLine()
-    $process.WaitForExit()
-    $process.CancelOutputRead()
-    $process.CancelErrorRead()
-
-    if ($process.ExitCode -ne 0) {
-        throw "Command failed with exit code $($process.ExitCode): $($Command -join ' ')"
+    if ($exitCode -ne 0) {
+        throw "Command failed with exit code ${exitCode}: $($Command -join ' ')"
     }
 }
 
