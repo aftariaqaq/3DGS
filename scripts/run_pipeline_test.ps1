@@ -34,6 +34,44 @@ function Find-Executable {
     throw "Required command not found: $Command"
 }
 
+function ConvertTo-ProcessArgument {
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Argument)
+
+    if ($Argument -notmatch '[\s"]') {
+        return $Argument
+    }
+
+    $builder = [System.Text.StringBuilder]::new()
+    [void]$builder.Append('"')
+    $backslashes = 0
+    foreach ($character in $Argument.ToCharArray()) {
+        if ($character -eq '\') {
+            $backslashes += 1
+            continue
+        }
+
+        if ($character -eq '"') {
+            [void]$builder.Append('\' * (($backslashes * 2) + 1))
+            [void]$builder.Append('"')
+            $backslashes = 0
+            continue
+        }
+
+        if ($backslashes -gt 0) {
+            [void]$builder.Append('\' * $backslashes)
+            $backslashes = 0
+        }
+        [void]$builder.Append($character)
+    }
+
+    if ($backslashes -gt 0) {
+        [void]$builder.Append('\' * ($backslashes * 2))
+    }
+    [void]$builder.Append('"')
+
+    return $builder.ToString()
+}
+
 function Invoke-LoggedCommand {
     param(
         [Parameter(Mandatory = $true)][string[]]$Command,
@@ -49,9 +87,7 @@ function Invoke-LoggedCommand {
     $process = [System.Diagnostics.Process]::new()
     $process.StartInfo.FileName = $Command[0]
     if ($Command.Count -gt 1) {
-        foreach ($argument in $Command[1..($Command.Count - 1)]) {
-            $process.StartInfo.ArgumentList.Add($argument)
-        }
+        $process.StartInfo.Arguments = (($Command[1..($Command.Count - 1)] | ForEach-Object { ConvertTo-ProcessArgument $_ }) -join " ")
     }
     $process.StartInfo.WorkingDirectory = $WorkingDirectory
     $process.StartInfo.UseShellExecute = $false
