@@ -34,7 +34,7 @@ foreach ($dir in $includeDirs) {
     Copy-Item -LiteralPath (Join-Path $repoRoot $dir) -Destination $stagingRoot -Recurse -Force
 }
 
-$includeFiles = @(".gitignore")
+$includeFiles = @(".gitignore", "README-CUDA.md")
 foreach ($file in $includeFiles) {
     $source = Join-Path $repoRoot $file
     if (Test-Path $source) {
