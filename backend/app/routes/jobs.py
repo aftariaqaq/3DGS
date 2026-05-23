@@ -212,19 +212,28 @@ def get_scene_viewer(scene_id: str) -> str:
       background: #101216;
       color: #e8ecf3;
     }}
+    * {{
+      box-sizing: border-box;
+    }}
     body {{
       margin: 0;
       min-height: 100vh;
-      display: grid;
-      grid-template-rows: auto 1fr;
+      overflow: hidden;
     }}
     header {{
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 4;
       padding: 14px 18px;
       border-bottom: 1px solid #29313d;
       display: flex;
       justify-content: space-between;
       gap: 16px;
       align-items: center;
+      background: rgba(16, 18, 22, 0.9);
+      backdrop-filter: blur(12px);
     }}
     h1 {{
       margin: 0;
@@ -237,23 +246,21 @@ def get_scene_viewer(scene_id: str) -> str:
     }}
     main {{
       position: relative;
-      min-height: 0;
-      background: #151922;
+      width: 100vw;
+      height: 100vh;
+      background: #11151d;
     }}
-    canvas {{
-      display: block;
+    #viewer-root {{
       width: 100%;
       height: 100%;
-      min-height: calc(100vh - 52px);
-      cursor: grab;
-    }}
-    canvas:active {{
-      cursor: grabbing;
+      position: absolute;
+      inset: 0;
     }}
     .status {{
       position: absolute;
       left: 16px;
       bottom: 16px;
+      z-index: 5;
       padding: 8px 10px;
       border: 1px solid #344052;
       background: rgba(16, 18, 22, 0.82);
@@ -262,289 +269,100 @@ def get_scene_viewer(scene_id: str) -> str:
       font-size: 12px;
       max-width: min(520px, calc(100vw - 32px));
     }}
+    .controls {{
+      position: absolute;
+      left: 16px;
+      top: 72px;
+      z-index: 5;
+      width: 240px;
+      border: 1px solid #303846;
+      border-radius: 8px;
+      background: rgba(18, 22, 30, 0.82);
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+      overflow: hidden;
+      backdrop-filter: blur(12px);
+    }}
+    .controls h2 {{
+      margin: 0;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 13px;
+      font-weight: 560;
+      color: #aab4c3;
+    }}
+    .controls dl {{
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px 14px;
+      margin: 0;
+      padding: 14px;
+      font-size: 12px;
+    }}
+    .controls dt {{
+      color: #e4e9f2;
+    }}
+    .controls dd {{
+      margin: 0;
+      color: #9da8b8;
+    }}
+    .error {{
+      color: #ffb4b4;
+      border-color: rgba(255, 100, 100, 0.45);
+    }}
   </style>
 </head>
 <body>
   <header>
-    <h1>Scene Viewer</h1>
+    <h1>3DGS Viewer</h1>
     <div class="meta">Scene: <strong>{scene_id}</strong></div>
   </header>
   <main>
-    <canvas id="viewer"></canvas>
-    <div class="status" id="status">Loading scene...</div>
+    <div id="viewer-root"></div>
+    <section class="controls" aria-label="Controls">
+      <h2>Controls</h2>
+      <dl>
+        <dt>Left Drag</dt><dd>Rotate</dd>
+        <dt>Scroll</dt><dd>Zoom</dd>
+        <dt>Right Drag</dt><dd>Pan</dd>
+        <dt>Space</dt><dd>Reset</dd>
+      </dl>
+    </section>
+    <div class="status" id="status">Loading Gaussian splats...</div>
   </main>
-  <script>
+  <script type="module">
+    import * as GaussianSplats3D from "https://esm.sh/@mkkellogg/gaussian-splats-3d@0.4.7?deps=three@0.184.0";
+
     const modelUrl = "{model_url}";
-    const canvas = document.getElementById("viewer");
+    const root = document.getElementById("viewer-root");
     const statusEl = document.getElementById("status");
 
-    const typeSizes = {{
-      char: 1, uchar: 1, int8: 1, uint8: 1,
-      short: 2, ushort: 2, int16: 2, uint16: 2,
-      int: 4, uint: 4, int32: 4, uint32: 4,
-      float: 4, float32: 4, double: 8, float64: 8
-    }};
-
-    function readValue(view, offset, type) {{
-      switch (type) {{
-        case "char":
-        case "int8": return view.getInt8(offset);
-        case "uchar":
-        case "uint8": return view.getUint8(offset);
-        case "short":
-        case "int16": return view.getInt16(offset, true);
-        case "ushort":
-        case "uint16": return view.getUint16(offset, true);
-        case "int":
-        case "int32": return view.getInt32(offset, true);
-        case "uint":
-        case "uint32": return view.getUint32(offset, true);
-        case "double":
-        case "float64": return view.getFloat64(offset, true);
-        default: return view.getFloat32(offset, true);
-      }}
-    }}
-
-    function clamp01(value) {{
-      return Math.max(0, Math.min(1, value));
-    }}
-
-    function dcToColor(value) {{
-      return clamp01(0.5 + 0.2820947918 * value);
-    }}
-
-    function parsePly(buffer) {{
-      const bytes = new Uint8Array(buffer);
-      const marker = new TextEncoder().encode("end_header\\n");
-      let headerEnd = -1;
-      for (let i = 0; i <= bytes.length - marker.length; i++) {{
-        let found = true;
-        for (let j = 0; j < marker.length; j++) {{
-          if (bytes[i + j] !== marker[j]) {{
-            found = false;
-            break;
-          }}
-        }}
-        if (found) {{
-          headerEnd = i + marker.length;
-          break;
-        }}
-      }}
-      if (headerEnd < 0) {{
-        throw new Error("Invalid PLY: missing header terminator");
-      }}
-
-      const header = new TextDecoder().decode(bytes.slice(0, headerEnd));
-      if (!header.includes("format binary_little_endian")) {{
-        throw new Error("Only binary_little_endian PLY is supported in this viewer");
-      }}
-
-      const lines = header.split(/\\r?\\n/);
-      let vertexCount = 0;
-      const properties = [];
-      let inVertex = false;
-      for (const line of lines) {{
-        const parts = line.trim().split(/\\s+/);
-        if (parts[0] === "element") {{
-          inVertex = parts[1] === "vertex";
-          if (inVertex) {{
-            vertexCount = Number(parts[2]);
-          }}
-        }} else if (inVertex && parts[0] === "property" && parts.length >= 3) {{
-          properties.push({{ type: parts[1], name: parts[2] }});
-        }}
-      }}
-
-      const stride = properties.reduce((sum, prop) => sum + (typeSizes[prop.type] || 4), 0);
-      const propOffsets = new Map();
-      let propOffset = 0;
-      for (const prop of properties) {{
-        propOffsets.set(prop.name, {{ offset: propOffset, type: prop.type }});
-        propOffset += typeSizes[prop.type] || 4;
-      }}
-
-      const view = new DataView(buffer, headerEnd);
-      const positions = new Float32Array(vertexCount * 3);
-      const colors = new Float32Array(vertexCount * 3);
-      let minX = Infinity, minY = Infinity, minZ = Infinity;
-      let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-
-      function readProp(base, name, fallback = 0) {{
-        const prop = propOffsets.get(name);
-        if (!prop) return fallback;
-        return readValue(view, base + prop.offset, prop.type);
-      }}
-
-      for (let i = 0; i < vertexCount; i++) {{
-        const base = i * stride;
-        const x = readProp(base, "x");
-        const y = readProp(base, "y");
-        const z = readProp(base, "z");
-        positions[i * 3] = x;
-        positions[i * 3 + 1] = y;
-        positions[i * 3 + 2] = z;
-        minX = Math.min(minX, x); minY = Math.min(minY, y); minZ = Math.min(minZ, z);
-        maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); maxZ = Math.max(maxZ, z);
-
-        if (propOffsets.has("red")) {{
-          colors[i * 3] = readProp(base, "red") / 255;
-          colors[i * 3 + 1] = readProp(base, "green") / 255;
-          colors[i * 3 + 2] = readProp(base, "blue") / 255;
-        }} else {{
-          colors[i * 3] = dcToColor(readProp(base, "f_dc_0"));
-          colors[i * 3 + 1] = dcToColor(readProp(base, "f_dc_1"));
-          colors[i * 3 + 2] = dcToColor(readProp(base, "f_dc_2"));
-        }}
-      }}
-
-      const cx = (minX + maxX) / 2;
-      const cy = (minY + maxY) / 2;
-      const cz = (minZ + maxZ) / 2;
-      const scale = 2 / Math.max(maxX - minX, maxY - minY, maxZ - minZ, 1e-6);
-      for (let i = 0; i < vertexCount; i++) {{
-        positions[i * 3] = (positions[i * 3] - cx) * scale;
-        positions[i * 3 + 1] = (positions[i * 3 + 1] - cy) * scale;
-        positions[i * 3 + 2] = (positions[i * 3 + 2] - cz) * scale;
-      }}
-
-      return {{ positions, colors, vertexCount }};
-    }}
-
-    function mat4Perspective(out, fovy, aspect, near, far) {{
-      const f = 1 / Math.tan(fovy / 2);
-      out.set([f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) / (near - far), -1, 0, 0, (2 * far * near) / (near - far), 0]);
-      return out;
-    }}
-
-    function mat4View(out, yaw, pitch, distance) {{
-      const cy = Math.cos(yaw), sy = Math.sin(yaw);
-      const cp = Math.cos(pitch), sp = Math.sin(pitch);
-      out.set([
-        cy, sy * sp, sy * cp, 0,
-        0, cp, -sp, 0,
-        -sy, cy * sp, cy * cp, 0,
-        0, 0, -distance, 1
-      ]);
-      return out;
-    }}
-
-    function mat4Multiply(out, a, b) {{
-      const r = new Float32Array(16);
-      for (let row = 0; row < 4; row++) {{
-        for (let col = 0; col < 4; col++) {{
-          r[col * 4 + row] = a[row] * b[col * 4] + a[4 + row] * b[col * 4 + 1] + a[8 + row] * b[col * 4 + 2] + a[12 + row] * b[col * 4 + 3];
-        }}
-      }}
-      out.set(r);
-      return out;
-    }}
-
     async function main() {{
-      const response = await fetch(modelUrl, {{ cache: "no-store" }});
-      if (!response.ok) throw new Error(`Failed to load model: ${{response.status}}`);
-      const scene = parsePly(await response.arrayBuffer());
-      statusEl.textContent = `Loaded ${{scene.vertexCount.toLocaleString()}} points from ${{modelUrl}}`;
-
-      const gl = canvas.getContext("webgl", {{ antialias: true }});
-      if (!gl) throw new Error("WebGL is not available");
-
-      const vs = `
-        attribute vec3 position;
-        attribute vec3 color;
-        uniform mat4 mvp;
-        uniform float pointSize;
-        varying vec3 vColor;
-        void main() {{
-          gl_Position = mvp * vec4(position, 1.0);
-          gl_PointSize = pointSize;
-          vColor = color;
-        }}
-      `;
-      const fs = `
-        precision mediump float;
-        varying vec3 vColor;
-        void main() {{
-          vec2 d = gl_PointCoord - vec2(0.5);
-          if (dot(d, d) > 0.25) discard;
-          gl_FragColor = vec4(vColor, 0.92);
-        }}
-      `;
-      function compile(type, source) {{
-        const shader = gl.createShader(type);
-        gl.shaderSource(shader, source);
-        gl.compileShader(shader);
-        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader));
-        return shader;
-      }}
-      const program = gl.createProgram();
-      gl.attachShader(program, compile(gl.VERTEX_SHADER, vs));
-      gl.attachShader(program, compile(gl.FRAGMENT_SHADER, fs));
-      gl.linkProgram(program);
-      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
-      gl.useProgram(program);
-
-      function bindAttribute(name, data) {{
-        const buffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-        gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-        const location = gl.getAttribLocation(program, name);
-        gl.enableVertexAttribArray(location);
-        gl.vertexAttribPointer(location, 3, gl.FLOAT, false, 0, 0);
-      }}
-      bindAttribute("position", scene.positions);
-      bindAttribute("color", scene.colors);
-
-      const mvpLocation = gl.getUniformLocation(program, "mvp");
-      const pointSizeLocation = gl.getUniformLocation(program, "pointSize");
-      let yaw = 0.6, pitch = -0.35, distance = 3.3;
-      let dragging = false, lastX = 0, lastY = 0;
-
-      canvas.addEventListener("pointerdown", event => {{
-        dragging = true;
-        lastX = event.clientX;
-        lastY = event.clientY;
-        canvas.setPointerCapture(event.pointerId);
+      const viewer = new GaussianSplats3D.Viewer({{
+        rootElement: root,
+        cameraUp: [0, -1, -0.6],
+        initialCameraPosition: [-1, -4, 6],
+        initialCameraLookAt: [0, 4, 0],
+        sharedMemoryForWorkers: false,
+        gpuAcceleratedSort: false,
+        useBuiltInControls: true
       }});
-      canvas.addEventListener("pointermove", event => {{
-        if (!dragging) return;
-        yaw += (event.clientX - lastX) * 0.006;
-        pitch = Math.max(-1.45, Math.min(1.45, pitch + (event.clientY - lastY) * 0.006));
-        lastX = event.clientX;
-        lastY = event.clientY;
+
+      await viewer.addSplatScene(modelUrl, {{
+        format: GaussianSplats3D.SceneFormat.Ply,
+        splatAlphaRemovalThreshold: 5,
+        showLoadingUI: true,
+        progressiveLoad: false,
+        position: [0, 1, 0],
+        rotation: [0, 0, 0, 1],
+        scale: [1.5, 1.5, 1.5]
       }});
-      canvas.addEventListener("pointerup", () => dragging = false);
-      canvas.addEventListener("wheel", event => {{
-        event.preventDefault();
-        distance = Math.max(1.2, Math.min(9, distance * (1 + event.deltaY * 0.001)));
-      }}, {{ passive: false }});
-
-      function render() {{
-        const dpr = window.devicePixelRatio || 1;
-        const width = Math.floor(canvas.clientWidth * dpr);
-        const height = Math.floor(canvas.clientHeight * dpr);
-        if (canvas.width !== width || canvas.height !== height) {{
-          canvas.width = width;
-          canvas.height = height;
-        }}
-        gl.viewport(0, 0, canvas.width, canvas.height);
-        gl.clearColor(0.082, 0.098, 0.133, 1);
-        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        gl.enable(gl.BLEND);
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-        const projection = mat4Perspective(new Float32Array(16), Math.PI / 3, canvas.width / canvas.height, 0.01, 100);
-        const view = mat4View(new Float32Array(16), yaw, pitch, distance);
-        const mvp = mat4Multiply(new Float32Array(16), projection, view);
-        gl.uniformMatrix4fv(mvpLocation, false, mvp);
-        gl.uniform1f(pointSizeLocation, Math.max(1.5, 2.4 * dpr));
-        gl.drawArrays(gl.POINTS, 0, scene.vertexCount);
-        requestAnimationFrame(render);
-      }}
-      render();
+      viewer.start();
+      statusEl.textContent = `Loaded Gaussian splats from ${{modelUrl}}`;
     }}
 
     main().catch(error => {{
       console.error(error);
+      statusEl.classList.add("error");
       statusEl.textContent = error.message;
     }});
   </script>

@@ -58,7 +58,8 @@ def test_scene_viewer_serves_webgl_html(monkeypatch, tmp_path):
     response = TestClient(app).get("/scenes/scene_001/viewer")
 
     assert response.status_code == 200
-    assert "Scene Viewer" in response.text
+    assert "3DGS Viewer" in response.text
     assert "/static/scenes/scene_001/scene.ply" in response.text
-    assert "parsePly" in response.text
-    assert "<canvas" in response.text
+    assert "@mkkellogg/gaussian-splats-3d@0.4.7" in response.text
+    assert "GaussianSplats3D.Viewer" in response.text
+    assert 'id="viewer-root"' in response.text
