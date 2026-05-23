@@ -5,7 +5,9 @@ param(
     [int]$MaxFrames = 80,
     [int]$Iterations = 500,
     [int]$OpenSplatDownscaleFactor = 1,
-    [int]$OpenSplatNumDownscales = 2
+    [int]$OpenSplatNumDownscales = 2,
+    [string]$OpenSplatDockerImage = "opensplat-cpu:local",
+    [switch]$OpenSplatUseGpu
 )
 
 Set-StrictMode -Version Latest
@@ -88,6 +90,44 @@ function Limit-Frames {
     return $MaxFrames
 }
 
+function Select-Evenly-SpacedFrames {
+    param(
+        [Parameter(Mandatory = $true)][string]$ImagesDir,
+        [Parameter(Mandatory = $true)][int]$MaxFrames
+    )
+
+    $frames = @(Get-ChildItem -Path $ImagesDir -Filter "*.jpg" | Sort-Object Name)
+    if ($frames.Count -le $MaxFrames) {
+        return $frames.Count
+    }
+
+    $selectedIndexes = [System.Collections.Generic.HashSet[int]]::new()
+    if ($MaxFrames -eq 1) {
+        [void]$selectedIndexes.Add(0)
+    } else {
+        for ($i = 0; $i -lt $MaxFrames; $i++) {
+            $index = [int][Math]::Round($i * ($frames.Count - 1) / ($MaxFrames - 1))
+            [void]$selectedIndexes.Add($index)
+        }
+    }
+
+    for ($i = 0; $i -lt $frames.Count; $i++) {
+        if (!$selectedIndexes.Contains($i)) {
+            Remove-Item -LiteralPath $frames[$i].FullName -Force
+        }
+    }
+
+    $remaining = @(Get-ChildItem -Path $ImagesDir -Filter "*.jpg" | Sort-Object Name)
+    for ($i = 0; $i -lt $remaining.Count; $i++) {
+        $target = Join-Path $ImagesDir ("frame_{0:D6}.jpg" -f ($i + 1))
+        if ($remaining[$i].FullName -ne $target) {
+            Move-Item -LiteralPath $remaining[$i].FullName -Destination $target -Force
+        }
+    }
+
+    return $MaxFrames
+}
+
 if (!(Test-Path $InputVideo)) {
     throw "Input video not found: $InputVideo"
 }
@@ -143,7 +183,7 @@ Invoke-LoggedCommand `
     -Command @($ffmpeg, "-y", "-i", $copiedVideo, "-vf", "fps=$Fps", (Join-Path $imagesDir "frame_%06d.jpg")) `
     -LogPath (Join-Path $logsDir "extract_frames.log")
 
-$frameCount = Limit-Frames -ImagesDir $imagesDir -MaxFrames $MaxFrames
+$frameCount = Select-Evenly-SpacedFrames -ImagesDir $imagesDir -MaxFrames $MaxFrames
 if ($frameCount -lt 2) {
     throw "Need at least 2 frames for COLMAP, got $frameCount"
 }
@@ -181,20 +221,29 @@ Invoke-LoggedCommand `
 
 $jobRootDocker = ($jobRoot -replace "\\", "/")
 
+$opensplatDockerArgs = @("run", "--rm")
+if ($OpenSplatUseGpu) {
+    $opensplatDockerArgs += @("--gpus", "all")
+}
+$opensplatDockerArgs += @(
+    "-v", "${jobRootDocker}:/work",
+    $OpenSplatDockerImage
+)
+if (!$OpenSplatUseGpu) {
+    $opensplatDockerArgs += "--cpu"
+}
+$opensplatDockerArgs += @(
+    "-n", "$Iterations",
+    "--downscale-factor", "$OpenSplatDownscaleFactor",
+    "--num-downscales", "$OpenSplatNumDownscales",
+    "-o", "/work/opensplat/splat.ply",
+    "--colmap-image-path", "/work/images",
+    "/work/colmap"
+)
+$opensplatCommand = @($docker) + $opensplatDockerArgs
+
 Invoke-LoggedCommand `
-    -Command @(
-        $docker,
-        "run", "--rm",
-        "-v", "${jobRootDocker}:/work",
-        "opensplat-cpu:local",
-        "--cpu",
-        "-n", "$Iterations",
-        "--downscale-factor", "$OpenSplatDownscaleFactor",
-        "--num-downscales", "$OpenSplatNumDownscales",
-        "-o", "/work/opensplat/splat.ply",
-        "--colmap-image-path", "/work/images",
-        "/work/colmap"
-    ) `
+    -Command $opensplatCommand `
     -LogPath (Join-Path $logsDir "opensplat.log")
 
 $result = Join-Path $opensplatDir "splat.ply"
