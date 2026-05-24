@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import JOBS_DIR, SCENES_DIR
 from app.routes import jobs
 
-app = FastAPI(title="3DGS OpenSplat MVP")
+app = FastAPI(title="3DGS CUDA Pipeline")
 
 JOBS_DIR.mkdir(parents=True, exist_ok=True)
 SCENES_DIR.mkdir(parents=True, exist_ok=True)

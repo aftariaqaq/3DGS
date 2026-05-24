@@ -14,7 +14,7 @@ def test_read_training_metrics_parses_opensplat_steps(monkeypatch, tmp_path):
     (storage.job_logs_dir("job_001") / "opensplat.log").write_text(
         "\n".join(
             [
-                "Using CPU",
+                "Using CUDA",
                 "Step 1: 0.281546 (0%)",
                 "Step 2: 0.304394 (0%)",
                 "Step 1000: 0.134722 (100%)",
@@ -48,4 +48,3 @@ def test_read_training_metrics_handles_missing_log(monkeypatch, tmp_path):
     assert metrics["latest_loss"] is None
     assert metrics["progress"] == 0
     assert metrics["points"] == []
-

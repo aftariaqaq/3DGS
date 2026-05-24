@@ -21,7 +21,11 @@ def test_run_job_orchestrates_pipeline_and_marks_ready(monkeypatch, tmp_path):
     monkeypatch.setattr(job_runner.colmap_runner, "run_feature_extractor", lambda job_id: calls.append("features"))
     monkeypatch.setattr(job_runner.colmap_runner, "run_sequential_matcher", lambda job_id: calls.append("matching"))
     monkeypatch.setattr(job_runner.colmap_runner, "run_mapper", lambda job_id: calls.append("mapping"))
-    monkeypatch.setattr(job_runner.opensplat_runner, "run_opensplat", lambda job_id, iterations: calls.append("opensplat") or Path("splat.ply"))
+    monkeypatch.setattr(
+        job_runner.opensplat_runner,
+        "run_opensplat",
+        lambda job_id, iterations: calls.append("opensplat_cuda") or Path("splat.ply"),
+    )
     monkeypatch.setattr(
         job_runner.model_exporter,
         "export_scene",
@@ -36,7 +40,7 @@ def test_run_job_orchestrates_pipeline_and_marks_ready(monkeypatch, tmp_path):
         "features",
         "matching",
         "mapping",
-        "opensplat",
+        "opensplat_cuda",
         ("export", 30),
     ]
     job = job_store.read_job("job_001")
@@ -62,4 +66,3 @@ def test_run_job_marks_failed_on_exception(monkeypatch, tmp_path):
     assert job["status"] == JobStatus.FAILED
     assert job["error_stage"] == JobStatus.COLMAP_FEATURES
     assert "feature extraction failed" in job["error_message"]
-

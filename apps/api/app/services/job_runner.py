@@ -48,8 +48,8 @@ def run_job(job_id: str) -> None:
         )
         _run_stage(
             job_id,
-            JobStatus.TRAINING_OPEN_SPLAT,
-            "OpenSplat CPU training",
+            JobStatus.TRAINING_SPLAT,
+            "CUDA splat training",
             lambda: opensplat_runner.run_opensplat(job_id, job["iterations"]),
         )
         scene = _run_stage(
@@ -61,4 +61,3 @@ def run_job(job_id: str) -> None:
         job_store.mark_ready(job_id, scene["id"], scene["model_url"])
     except Exception:
         return
-

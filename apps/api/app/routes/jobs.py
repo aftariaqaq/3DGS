@@ -114,7 +114,7 @@ def get_job_metrics_view(job_id: str) -> str:
     </div>
   </header>
   <main>
-    <div class="chart" id="chart"><div class="empty">Waiting for OpenSplat loss output...</div></div>
+    <div class="chart" id="chart"><div class="empty">Waiting for training loss output...</div></div>
   </main>
   <script>
     const metricsUrl = "{metrics_url}";
@@ -129,7 +129,7 @@ def get_job_metrics_view(job_id: str) -> str:
 
     function render(points) {{
       if (!points.length) {{
-        chart.innerHTML = '<div class="empty">Waiting for OpenSplat loss output...</div>';
+        chart.innerHTML = '<div class="empty">Waiting for training loss output...</div>';
         return;
       }}
 

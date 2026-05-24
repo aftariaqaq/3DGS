@@ -1,7 +1,7 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $localToolsRoot = "D:\.codex_tools"
 
 function Find-Executable {
@@ -38,6 +38,7 @@ $checks = @(
         Command = "colmap"
         Arguments = @("-h")
         FallbackPaths = @(
+            "$localToolsRoot\colmap-x64-windows-cuda\bin\colmap.exe"
             "$localToolsRoot\colmap-x64-windows-nocuda\bin\colmap.exe"
         )
     },
@@ -49,7 +50,7 @@ $checks = @(
             "$repoRoot\tools\opensplat\opensplat.exe",
             "$localToolsRoot\opensplat\opensplat.exe"
         )
-        DockerImage = "opensplat-cpu:local"
+        DockerImage = "opensplat-cuda:local"
     }
 )
 

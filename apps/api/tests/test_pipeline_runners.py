@@ -36,7 +36,7 @@ def test_extract_frames_runs_ffmpeg_and_limits_frames(monkeypatch, tmp_path):
     assert "fps=1" in calls[0][0]
 
 
-def test_colmap_runner_uses_cpu_feature_and_matching(monkeypatch, tmp_path):
+def test_colmap_runner_uses_cuda_feature_and_matching(monkeypatch, tmp_path):
     configure_tmp_storage(monkeypatch, tmp_path)
     storage.ensure_job_dirs("job_001")
     calls = []
@@ -51,12 +51,15 @@ def test_colmap_runner_uses_cpu_feature_and_matching(monkeypatch, tmp_path):
     colmap_runner.run_mapper("job_001")
 
     assert calls[0][1] == "feature_extractor"
-    assert "--FeatureExtraction.use_gpu" in calls[0]
-    assert "0" in calls[0]
+    assert "--SiftExtraction.use_gpu" in calls[0]
+    assert "1" in calls[0]
+    assert "--SiftExtraction.max_image_size" in calls[0]
+    assert "2400" in calls[0]
     assert calls[1][1] == "sequential_matcher"
-    assert "--FeatureMatching.use_gpu" in calls[1]
-    assert "--SiftMatching.cpu_brute_force_matcher" in calls[1]
+    assert "--SiftMatching.use_gpu" in calls[1]
+    assert "--SequentialMatching.overlap" in calls[1]
     assert calls[2][1] == "mapper"
+    assert "--Mapper.ba_global_max_num_iterations" in calls[2]
 
 
 def test_opensplat_runner_uses_docker_and_returns_output(monkeypatch, tmp_path):
@@ -74,8 +77,8 @@ def test_opensplat_runner_uses_docker_and_returns_output(monkeypatch, tmp_path):
 
     assert result == storage.job_opensplat_dir("job_001") / "splat.ply"
     assert calls[0][0] == "docker"
-    assert "opensplat-cpu:local" in calls[0]
-    assert "--cpu" in calls[0]
+    assert "opensplat-cuda:local" in calls[0]
+    assert "--gpus" in calls[0]
+    assert "--cpu" not in calls[0]
     assert "--colmap-image-path" in calls[0]
     assert "/work/colmap" in calls[0]
-

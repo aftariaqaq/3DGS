@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.config import OPENSPLAT_DOCKER_IMAGE
+from app.config import OPENSPLAT_CUDA_DOCKER_IMAGE
 from app.services import storage
 from app.services.process_runner import run_command
 
@@ -18,10 +18,11 @@ def run_opensplat(job_id: str, iterations: int) -> Path:
             "docker",
             "run",
             "--rm",
+            "--gpus",
+            "all",
             "-v",
             f"{_docker_mount_path(storage.job_dir(job_id))}:/work",
-            OPENSPLAT_DOCKER_IMAGE,
-            "--cpu",
+            OPENSPLAT_CUDA_DOCKER_IMAGE,
             "-n",
             str(iterations),
             "-o",
@@ -36,4 +37,3 @@ def run_opensplat(job_id: str, iterations: int) -> Path:
     if not output_path.exists():
         raise RuntimeError(f"OpenSplat output not found: {output_path}")
     return output_path
-

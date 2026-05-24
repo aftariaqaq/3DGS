@@ -9,7 +9,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $docker = (Get-Command "docker" -ErrorAction Stop).Source
 $jobRoot = Join-Path $repoRoot "data\jobs\$JobId"
 $colmapDir = Join-Path $jobRoot "colmap"

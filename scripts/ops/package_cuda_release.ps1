@@ -6,7 +6,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $outputRoot = Join-Path $repoRoot $OutputDir
 New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 
@@ -29,7 +29,7 @@ if (Test-Path $stagingRoot) {
 
 New-Item -ItemType Directory -Force -Path $stagingRoot | Out-Null
 
-$includeDirs = @("backend", "docker", "docs", "scripts")
+$includeDirs = @("apps", "packages", "docker", "docs", "scripts")
 foreach ($dir in $includeDirs) {
     Copy-Item -LiteralPath (Join-Path $repoRoot $dir) -Destination $stagingRoot -Recurse -Force
 }
@@ -40,6 +40,17 @@ foreach ($file in $includeFiles) {
     if (Test-Path $source) {
         Copy-Item -LiteralPath $source -Destination $stagingRoot -Force
     }
+}
+
+$cacheDirs = Get-ChildItem -LiteralPath $stagingRoot -Recurse -Directory -Force |
+    Where-Object { $_.Name -in @("__pycache__", ".pytest_cache", ".venv", "node_modules", "dist") }
+foreach ($cacheDir in $cacheDirs) {
+    Remove-Item -LiteralPath $cacheDir.FullName -Recurse -Force
+}
+
+$compiledPythonFiles = Get-ChildItem -LiteralPath $stagingRoot -Recurse -File -Force -Include "*.pyc", "*.pyo"
+foreach ($compiledPythonFile in $compiledPythonFiles) {
+    Remove-Item -LiteralPath $compiledPythonFile.FullName -Force
 }
 
 if (Test-Path $archivePath) {
