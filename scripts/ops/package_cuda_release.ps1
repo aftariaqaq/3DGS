@@ -43,7 +43,7 @@ foreach ($file in $includeFiles) {
 }
 
 $cacheDirs = Get-ChildItem -LiteralPath $stagingRoot -Recurse -Directory -Force |
-    Where-Object { $_.Name -in @("__pycache__", ".pytest_cache", ".venv", "node_modules", "dist") }
+    Where-Object { $_.Name -in @("__pycache__", ".pytest_cache", ".venv", "node_modules", "dist", ".gradle", "build") }
 foreach ($cacheDir in $cacheDirs) {
     Remove-Item -LiteralPath $cacheDir.FullName -Recurse -Force
 }
@@ -51,6 +51,11 @@ foreach ($cacheDir in $cacheDirs) {
 $compiledPythonFiles = Get-ChildItem -LiteralPath $stagingRoot -Recurse -File -Force -Include "*.pyc", "*.pyo"
 foreach ($compiledPythonFile in $compiledPythonFiles) {
     Remove-Item -LiteralPath $compiledPythonFile.FullName -Force
+}
+
+$localPropertiesFiles = Get-ChildItem -LiteralPath $stagingRoot -Recurse -File -Force -Filter "local.properties"
+foreach ($localPropertiesFile in $localPropertiesFiles) {
+    Remove-Item -LiteralPath $localPropertiesFile.FullName -Force
 }
 
 if (Test-Path $archivePath) {
