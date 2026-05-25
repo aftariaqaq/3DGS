@@ -10,6 +10,9 @@ apps/api/app/__pycache__/
 apps/api/app/**/__pycache__/
 frontend/node_modules/
 frontend/dist/
+apps/capture-android/.gradle/
+apps/capture-android/**/build/
+apps/capture-android/local.properties
 .pytest_cache/
 *.log
 *.pyc
