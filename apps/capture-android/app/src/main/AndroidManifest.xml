@@ -13,7 +13,7 @@
 
     <application
         android:allowBackup="false"
-        android:label="3DGS Capture"
+        android:label="3DGS 采集"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
         <provider

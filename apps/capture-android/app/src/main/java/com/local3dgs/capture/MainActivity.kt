@@ -20,11 +20,11 @@ class MainActivity : Activity() {
             setPadding(32, 32, 32, 32)
         }
         val label = TextView(this).apply {
-            text = "3DGS Capture"
+            text = UiText.APP_TITLE
             textSize = 20f
         }
         val button = Button(this).apply {
-            text = "Export sample bundle"
+            text = UiText.EXPORT_SAMPLE_BUNDLE
             setOnClickListener { exportSampleBundle() }
         }
         root.addView(label)
@@ -38,7 +38,7 @@ class MainActivity : Activity() {
             val zip = CaptureBundleExporter().exportSampleBundle(outputDir)
             shareFile(zip)
         } catch (error: Exception) {
-            Toast.makeText(this, error.message ?: "Export failed", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, error.message ?: UiText.EXPORT_FAILED, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -49,6 +49,6 @@ class MainActivity : Activity() {
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        startActivity(Intent.createChooser(intent, "Share capture bundle"))
+        startActivity(Intent.createChooser(intent, UiText.SHARE_CAPTURE_BUNDLE))
     }
 }
