@@ -92,6 +92,14 @@ Optional fields:
 - `exposure_mode`
 - `focus_mode`
 - `white_balance_mode`
+- `zoom_ratio`
+- `scaler_crop_region`
+- `ae_lock_enabled`
+- `af_lock_enabled`
+- `awb_lock_enabled`
+- `camera_to_imu_transform`
+- `camera_imu_time_offset_ns`
+- `calibration_profile_id`
 
 ### `frame_timestamps.jsonl`
 
@@ -123,6 +131,8 @@ Target fields:
 - focal length
 - focus distance
 - aperture
+- zoom ratio
+- scaler crop region
 - optical stabilization mode
 - video stabilization mode
 - lens intrinsics
@@ -165,6 +175,11 @@ Event types:
 - `dropped_frame`
 - `exposure_jump`
 - `focus_jump`
+- `white_balance_jump`
+- `zoom_changed`
+- `crop_region_changed`
+- `stabilization_changed`
+- `camera_metadata_missing`
 - `thermal_warning`
 - `app_pause`
 - `app_resume`
@@ -195,6 +210,49 @@ The first capture mode prioritizes repeatability:
 - Fixed or logged focus behavior.
 - Disable or log video stabilization if the device exposes the setting.
 - Keep screen awake during capture.
+
+### Camera Control And Distortion Policy
+
+The capture app must keep camera geometry stable whenever the device allows it.
+
+Required first-version controls:
+
+- Lock one `camera_id` for the whole capture.
+- Do not switch between ultra-wide, wide, and telephoto cameras during recording.
+- Keep `zoom_ratio` at `1.0` by default.
+- Disable user pinch zoom during capture.
+- Keep video resolution fixed for the whole capture.
+- Keep target frame rate fixed for the whole capture.
+- Prefer disabling electronic video stabilization; if the device cannot disable it, record the active stabilization mode every frame.
+- Warm up AE, AF, and AWB before recording, then prefer locking them for the formal capture.
+
+Allowed fallback behavior:
+
+- If exposure cannot be locked because the scene brightness varies too much, keep auto exposure enabled but record `exposure_time_ns`, `iso`, and `ae_state` for every camera sample.
+- If focus cannot be locked safely, keep autofocus enabled but record focus distance and `af_state`, and emit `focus_jump` events.
+- If white balance cannot be locked, record `awb_state` and emit `white_balance_jump` events.
+
+Distortion handling:
+
+- The app records Camera2-provided `lens_intrinsics`, `lens_distortion`, physical sensor size, focal length, crop region, and stabilization state when available.
+- Host processing does not blindly trust phone-provided calibration.
+- COLMAP remains responsible for estimating the final camera model in the first implementation.
+- Phone intrinsics and distortion are used as initial metadata, diagnostics, and later calibration-library seeds.
+- If COLMAP-estimated intrinsics differ strongly from phone metadata, the host report should flag likely causes: digital crop, video stabilization, wrong camera ID, focus breathing, changing zoom, or missing calibration.
+
+Recommended first COLMAP camera models:
+
+- Use `RADIAL` or `OPENCV` for normal phone lenses.
+- Avoid `FULL_OPENCV` by default because it can overfit when frame coverage is limited.
+- Avoid ultra-wide capture as the default mode; it needs stronger distortion handling and should become a separate capture profile.
+
+Longer term, maintain a calibration library keyed by:
+
+```text
+device_model + camera_id + resolution + zoom_ratio + stabilization_mode
+```
+
+Each profile can store intrinsics, distortion, camera-to-IMU transform, time offset, calibration date, and confidence.
 
 ### UI
 
@@ -258,6 +316,7 @@ First version uses deterministic rules:
 - Reject badly blurred frames.
 - Reject extreme exposure frames.
 - Reject frames near large exposure or focus jumps.
+- Reject frames near zoom, crop-region, stabilization, or white-balance jumps.
 - Prefer frames separated by enough time and motion.
 - Avoid long static runs.
 - Avoid high angular velocity frames unless coverage is otherwise poor.
@@ -287,6 +346,7 @@ Conflict policy:
 - If COLMAP has low reprojection error and consistent track coverage, trust COLMAP for geometry.
 - If COLMAP has local jumps or poor track coverage, use sensor and image-quality signals to identify candidate bad frames.
 - If sensor and COLMAP disagree globally, first suspect timestamp alignment, coordinate transform, stabilization, rolling shutter, or changing intrinsics.
+- If COLMAP intrinsics disagree strongly with phone metadata, first suspect zoom/crop, stabilization, wrong camera ID, focus breathing, or an invalid calibration profile.
 
 ## Interfaces
 
@@ -341,12 +401,17 @@ Manual acceptance:
 - Android devices expose inconsistent Camera2 metadata.
 - Encoded frame timestamps may not map perfectly to sensor timestamps.
 - Video stabilization may crop or warp frames in ways that hurt geometry.
+- Digital zoom or changing crop regions can silently change effective intrinsics.
+- Autofocus focus breathing can change effective focal length.
+- Vendor-provided lens intrinsics and distortion may be missing or inaccurate.
 - Some devices throttle during long 4K capture.
 - IMU coordinate frames and camera frames require careful transform handling.
 
 Risk mitigation:
 
 - Preserve raw metadata and clearly report missing fields.
+- Prefer fixed camera geometry; when not possible, record every changing parameter and surface warnings.
+- Treat phone calibration as metadata, not truth, until validated against COLMAP or a calibration profile.
 - Prefer diagnostics over hidden corrections.
 - Start with deterministic filtering before adding probabilistic fusion.
 - Keep bundle format versioned.
@@ -359,4 +424,3 @@ The first milestone is not a polished app. It is a measurement instrument:
 - Host validates and imports the capture.
 - Host selects frames with explicit scoring.
 - Existing CUDA pipeline can train from those selected frames.
-
