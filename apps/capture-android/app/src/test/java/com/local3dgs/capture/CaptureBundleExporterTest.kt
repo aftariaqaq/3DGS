@@ -1,6 +1,7 @@
 package com.local3dgs.capture
 
 import com.local3dgs.capture.export.CaptureBundleExporter
+import com.local3dgs.capture.capture.ImuCaptureSession
 import java.io.File
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -56,6 +57,28 @@ class CaptureBundleExporterTest {
             assertTrue(checksums.contains("\"video.mp4\""))
             assertTrue(checksums.contains("\"metadata.json\""))
             assertTrue(checksums.contains("\"events.jsonl\""))
+        }
+
+        outputDir.deleteRecursively()
+    }
+
+    @Test
+    fun sessionBundleExportsRecordedImuSamples() {
+        val outputDir = createTempDir(prefix = "capture-export-test")
+        val session = ImuCaptureSession()
+        session.start(10_000)
+        session.recordSample(type = "gyro", timestampNs = 11_000, values = floatArrayOf(1.0f, 2.0f, 3.0f), accuracy = 3)
+        session.stop(20_000)
+
+        val zip = CaptureBundleExporter().exportSessionBundle(outputDir, session.snapshot())
+
+        ZipFile(zip).use { archive ->
+            val imuSamples = archive.getInputStream(archive.getEntry("imu_samples.jsonl")).reader().readText()
+            assertTrue(imuSamples.contains("\"type\":\"gyro\""))
+            assertTrue(imuSamples.contains("\"timestamp_ns\":11000"))
+            val events = archive.getInputStream(archive.getEntry("events.jsonl")).reader().readText()
+            assertTrue(events.contains("capture_started"))
+            assertTrue(events.contains("capture_stopped"))
         }
 
         outputDir.deleteRecursively()

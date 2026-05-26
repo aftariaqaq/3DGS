@@ -1,5 +1,6 @@
 package com.local3dgs.capture.export
 
+import com.local3dgs.capture.capture.ImuCaptureSnapshot
 import com.local3dgs.capture.model.CameraSample
 import com.local3dgs.capture.model.CaptureEvent
 import com.local3dgs.capture.model.CaptureMetadata
@@ -31,7 +32,6 @@ class CaptureBundleExporter(
     fun exportSampleBundle(outputDir: File): File {
         outputDir.mkdirs()
         val captureId = "capture_sample_${System.currentTimeMillis()}"
-        val payloads = linkedMapOf<String, ByteArray>()
         val metadata = CaptureMetadata(
             schemaVersion = "1.0",
             captureId = captureId,
@@ -58,29 +58,78 @@ class CaptureBundleExporter(
             awbLockEnabled = true
         )
 
-        payloads["video.mp4"] = "sample video placeholder\n".toByteArray(Charsets.UTF_8)
+        val payloads = buildPayloads(
+            metadata = metadata,
+            frameTimestamps = listOf(FrameTimestamp(frameIndex = 0, ptsUs = 0, sensorTimestampNs = 1_000, monotonicNs = 1_000)),
+            cameraSamples = listOf(CameraSample(sensorTimestampNs = 1_000, zoomRatio = 1.0f, scalerCropRegion = listOf(0, 0, 1920, 1080))),
+            imuSamples = listOf(ImuSample(type = "gyro", timestampNs = 1_000, x = 0.0f, y = 0.0f, z = 0.0f)),
+            events = listOf(CaptureEvent(timestampNs = 1_000, type = "export_started", message = "sample export"))
+        )
+        return writeZip(outputDir, captureId, payloads)
+    }
+
+    fun exportSessionBundle(outputDir: File, snapshot: ImuCaptureSnapshot): File {
+        outputDir.mkdirs()
+        val captureId = "capture_imu_${System.currentTimeMillis()}"
+        val durationUs = ((snapshot.stoppedMonotonicNs - snapshot.startedMonotonicNs).coerceAtLeast(0L)) / 1_000L
+        val metadata = CaptureMetadata(
+            schemaVersion = "1.0",
+            captureId = captureId,
+            appVersion = "0.1.0",
+            platform = "android",
+            deviceManufacturer = android.os.Build.MANUFACTURER ?: "unknown",
+            deviceModel = android.os.Build.MODEL ?: "unknown",
+            androidApiLevel = android.os.Build.VERSION.SDK_INT,
+            cameraId = "imu_only",
+            lensFacing = "back",
+            sensorOrientationDegrees = 90,
+            videoWidth = 1920,
+            videoHeight = 1080,
+            targetFps = 30,
+            actualVideoDurationUs = durationUs.coerceAtLeast(1L),
+            videoCodec = "imu_only_placeholder",
+            bitrateBps = 8_000_000,
+            startedMonotonicNs = snapshot.startedMonotonicNs,
+            stoppedMonotonicNs = snapshot.stoppedMonotonicNs,
+            zoomRatio = 1.0f,
+            scalerCropRegion = listOf(0, 0, 1920, 1080),
+            aeLockEnabled = true,
+            afLockEnabled = true,
+            awbLockEnabled = true
+        )
+        val frameTime = snapshot.startedMonotonicNs
+        val payloads = buildPayloads(
+            metadata = metadata,
+            frameTimestamps = listOf(FrameTimestamp(frameIndex = 0, ptsUs = 0, sensorTimestampNs = frameTime, monotonicNs = frameTime)),
+            cameraSamples = listOf(CameraSample(sensorTimestampNs = frameTime, zoomRatio = 1.0f, scalerCropRegion = listOf(0, 0, 1920, 1080))),
+            imuSamples = snapshot.imuSamples,
+            events = snapshot.events
+        )
+        return writeZip(outputDir, captureId, payloads)
+    }
+
+    private fun buildPayloads(
+        metadata: CaptureMetadata,
+        frameTimestamps: List<FrameTimestamp>,
+        cameraSamples: List<CameraSample>,
+        imuSamples: List<ImuSample>,
+        events: List<CaptureEvent>
+    ): LinkedHashMap<String, ByteArray> {
+        val payloads = linkedMapOf<String, ByteArray>()
+        payloads["video.mp4"] = "video placeholder\n".toByteArray(Charsets.UTF_8)
         payloads["metadata.json"] = json.encodeToString(CaptureMetadata.serializer(), metadata).toByteArray(Charsets.UTF_8)
-        payloads["frame_timestamps.jsonl"] = jsonl(
-            FrameTimestamp.serializer(),
-            listOf(FrameTimestamp(frameIndex = 0, ptsUs = 0, sensorTimestampNs = 1_000, monotonicNs = 1_000))
-        )
-        payloads["camera_samples.jsonl"] = jsonl(
-            CameraSample.serializer(),
-            listOf(CameraSample(sensorTimestampNs = 1_000, zoomRatio = 1.0f, scalerCropRegion = listOf(0, 0, 1920, 1080)))
-        )
-        payloads["imu_samples.jsonl"] = jsonl(
-            ImuSample.serializer(),
-            listOf(ImuSample(type = "gyro", timestampNs = 1_000, x = 0.0f, y = 0.0f, z = 0.0f))
-        )
-        payloads["events.jsonl"] = jsonl(
-            CaptureEvent.serializer(),
-            listOf(CaptureEvent(timestampNs = 1_000, type = "export_started", message = "sample export"))
-        )
+        payloads["frame_timestamps.jsonl"] = jsonl(FrameTimestamp.serializer(), frameTimestamps)
+        payloads["camera_samples.jsonl"] = jsonl(CameraSample.serializer(), cameraSamples)
+        payloads["imu_samples.jsonl"] = jsonl(ImuSample.serializer(), imuSamples)
+        payloads["events.jsonl"] = jsonl(CaptureEvent.serializer(), events)
         payloads["checksums.json"] = json.encodeToString(
             ChecksumManifest.serializer(),
             ChecksumManifest(payloads.mapValues { (_, bytes) -> sha256(bytes) })
         ).toByteArray(Charsets.UTF_8)
+        return payloads
+    }
 
+    private fun writeZip(outputDir: File, captureId: String, payloads: Map<String, ByteArray>): File {
         val zipFile = File(outputDir, "$captureId.zip")
         ZipOutputStream(zipFile.outputStream().buffered()).use { zip ->
             for ((name, bytes) in payloads) {
