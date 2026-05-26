@@ -22,6 +22,12 @@ class CaptureBundleExporter(
         prettyPrint = true
     }
 ) {
+    private val jsonlJson = Json {
+        encodeDefaults = false
+        explicitNulls = false
+        prettyPrint = false
+    }
+
     fun exportSampleBundle(outputDir: File): File {
         outputDir.mkdirs()
         val captureId = "capture_sample_${System.currentTimeMillis()}"
@@ -42,7 +48,7 @@ class CaptureBundleExporter(
             targetFps = 30,
             actualVideoDurationUs = 1_000_000,
             videoCodec = "sample",
-            bitrateBps = 0,
+            bitrateBps = 8_000_000,
             startedMonotonicNs = 1_000,
             stoppedMonotonicNs = 1_001_000_000,
             zoomRatio = 1.0f,
@@ -88,7 +94,7 @@ class CaptureBundleExporter(
 
     private fun <T> jsonl(serializer: KSerializer<T>, records: List<T>): ByteArray {
         val output = ByteArrayOutputStream()
-        JsonlWriter(output, serializer, json).use { writer ->
+        JsonlWriter(output, serializer, jsonlJson).use { writer ->
             records.forEach { writer.write(it) }
         }
         return output.toByteArray()

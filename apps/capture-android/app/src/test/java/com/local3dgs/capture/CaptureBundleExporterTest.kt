@@ -2,6 +2,8 @@ package com.local3dgs.capture
 
 import com.local3dgs.capture.export.CaptureBundleExporter
 import java.io.File
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import java.util.zip.ZipFile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -32,6 +34,12 @@ class CaptureBundleExporterTest {
             val metadata = archive.getInputStream(archive.getEntry("metadata.json")).reader().readText()
             assertTrue(metadata.contains("\"capture_id\""))
             assertTrue(metadata.contains("\"zoom_ratio\""))
+            assertTrue(metadata.contains("\"bitrate_bps\": 8000000"))
+
+            val cameraSamples = archive.getInputStream(archive.getEntry("camera_samples.jsonl")).reader().readText()
+            val lines = cameraSamples.trim().lines()
+            assertEquals(1, lines.size)
+            assertTrue(Json.parseToJsonElement(lines.single()).jsonObject.containsKey("sensor_timestamp_ns"))
         }
 
         outputDir.deleteRecursively()
