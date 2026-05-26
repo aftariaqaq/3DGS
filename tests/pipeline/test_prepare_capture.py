@@ -67,6 +67,38 @@ def test_prepare_capture_extracts_frames_scores_and_attaches_sensor_windows(tmp_
     assert "fast_rotation" in decisions[2]["reasons"]
 
 
+def test_prepare_capture_trims_estimated_timestamps_to_extracted_frames(tmp_path):
+    capture_root = tmp_path / "captures" / "capture_001"
+    raw_dir = capture_root / "raw"
+    raw_dir.mkdir(parents=True)
+    (raw_dir / "video.mp4").write_bytes(b"fake video")
+    write_jsonl(
+        raw_dir / "frame_timestamps.jsonl",
+        [
+            FrameTimestamp(frame_index=0, pts_us=0, sensor_timestamp_ns=1_000),
+            FrameTimestamp(frame_index=1, pts_us=33_333, sensor_timestamp_ns=34_333_000),
+            FrameTimestamp(frame_index=2, pts_us=66_666, sensor_timestamp_ns=67_666_000),
+        ],
+    )
+    write_jsonl(raw_dir / "camera_samples.jsonl", [CameraSample(sensor_timestamp_ns=1_000)])
+    write_jsonl(raw_dir / "imu_samples.jsonl", [ImuSample(type="gyro", timestamp_ns=1_000, x=0.0, y=0.0, z=0.1)])
+    write_jsonl(raw_dir / "events.jsonl", [])
+
+    def short_extractor(video_path: Path, frames_dir: Path, frame_count: int) -> list[Path]:
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        paths = [frames_dir / "frame_000000.jpg", frames_dir / "frame_000001.jpg"]
+        _write_image(paths[0], [[0, 255, 0], [255, 128, 255], [0, 255, 0]])
+        _write_image(paths[1], [[0, 255, 0], [255, 128, 255], [0, 255, 0]])
+        return paths
+
+    prepare_capture_for_selection(capture_root, max_frames=2, frame_extractor=short_extractor)
+
+    decisions = read_jsonl(capture_root / "normalized" / "frame_decisions.jsonl")
+    windows = read_jsonl(capture_root / "normalized" / "sensor_windows.jsonl")
+    assert [decision["frame_index"] for decision in decisions] == [0, 1]
+    assert [window["frame_index"] for window in windows] == [0, 1]
+
+
 def test_pipeline_cli_exposes_prepare_capture_command(capsys, monkeypatch, tmp_path):
     capture_root = tmp_path / "capture_001"
 

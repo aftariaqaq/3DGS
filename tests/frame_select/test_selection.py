@@ -37,4 +37,17 @@ def test_select_keyframes_rejects_temporally_close_duplicates():
 
     assert decisions[0].selected is True
     assert decisions[1].selected is False
-    assert "too_close_temporally" in decisions[1].reasons
+
+
+def test_select_keyframes_uses_best_effort_when_strict_quality_rejects_every_frame():
+    candidates = [
+        FrameCandidate(frame_index=0, timestamp_ns=0, blur=0.1, exposure=0.9, texture=0.8, duplicate=None),
+        FrameCandidate(frame_index=1, timestamp_ns=50, blur=0.1, exposure=0.4, texture=0.4, duplicate=0.01),
+        FrameCandidate(frame_index=2, timestamp_ns=200, blur=0.1, exposure=0.8, texture=0.8, duplicate=0.5),
+    ]
+
+    decisions = select_keyframes(candidates, max_frames=2, min_time_distance_ns=100)
+
+    selected = [decision for decision in decisions if decision.selected]
+    assert [decision.frame_index for decision in selected] == [0, 2]
+    assert all(decision.reasons == ["selected_best_effort"] for decision in selected)

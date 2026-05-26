@@ -85,5 +85,36 @@ def select_keyframes(
                 reasons=sorted(set(reasons)),
             )
         )
-    return decisions
+    if any(decision.selected for decision in decisions):
+        return decisions
+    return _best_effort_decisions(candidates, decisions, max_frames=max_frames, min_time_distance_ns=min_time_distance_ns)
 
+
+def _best_effort_decisions(
+    candidates: list[FrameCandidate],
+    decisions: list[FrameDecision],
+    *,
+    max_frames: int,
+    min_time_distance_ns: int,
+) -> list[FrameDecision]:
+    selected_indexes: set[int] = set()
+    selected_timestamps: list[int] = []
+    by_score = sorted(candidates, key=lambda item: item.score, reverse=True)
+    for candidate in by_score:
+        if len(selected_indexes) >= max_frames:
+            break
+        if any(abs(candidate.timestamp_ns - timestamp) < min_time_distance_ns for timestamp in selected_timestamps):
+            continue
+        selected_indexes.add(candidate.frame_index)
+        selected_timestamps.append(candidate.timestamp_ns)
+
+    return [
+        FrameDecision(
+            frame_index=decision.frame_index,
+            timestamp_ns=decision.timestamp_ns,
+            selected=decision.frame_index in selected_indexes,
+            score=decision.score,
+            reasons=["selected_best_effort"] if decision.frame_index in selected_indexes else decision.reasons,
+        )
+        for decision in decisions
+    ]

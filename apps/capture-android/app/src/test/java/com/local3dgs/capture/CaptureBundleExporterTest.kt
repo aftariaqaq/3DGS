@@ -2,6 +2,7 @@ package com.local3dgs.capture
 
 import com.local3dgs.capture.export.CaptureBundleExporter
 import com.local3dgs.capture.capture.ImuCaptureSession
+import com.local3dgs.capture.capture.RecordedVideo
 import java.io.File
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -79,6 +80,49 @@ class CaptureBundleExporterTest {
             val events = archive.getInputStream(archive.getEntry("events.jsonl")).reader().readText()
             assertTrue(events.contains("capture_started"))
             assertTrue(events.contains("capture_stopped"))
+        }
+
+        outputDir.deleteRecursively()
+    }
+
+    @Test
+    fun recordedSessionBundleUsesCapturedVideoFile() {
+        val outputDir = createTempDir(prefix = "capture-export-test")
+        val video = File(outputDir, "recorded.mp4")
+        video.writeBytes(byteArrayOf(0, 1, 2, 3, 4))
+        val session = ImuCaptureSession()
+        session.start(10_000)
+        session.stop(1_010_000_000)
+
+        val zip = CaptureBundleExporter().exportRecordedSessionBundle(
+            outputDir = outputDir,
+            snapshot = session.snapshot(),
+            recordedVideo = RecordedVideo(
+                file = video,
+                width = 1920,
+                height = 1080,
+                fps = 30,
+                bitrateBps = 20_000_000,
+                codec = "video/avc",
+                cameraId = "0",
+                lensFacing = "back",
+                sensorOrientationDegrees = 90,
+                stabilizationMode = "off",
+                focusMode = "continuous"
+            )
+        )
+
+        ZipFile(zip).use { archive ->
+            assertEquals(
+                listOf<Byte>(0, 1, 2, 3, 4),
+                archive.getInputStream(archive.getEntry("video.mp4")).readBytes().toList()
+            )
+            val metadata = archive.getInputStream(archive.getEntry("metadata.json")).reader().readText()
+            assertTrue(metadata.contains("\"video_codec\": \"video/avc\""))
+            assertTrue(metadata.contains("\"camera_id\": \"0\""))
+            assertTrue(metadata.contains("\"bitrate_bps\": 20000000"))
+            assertTrue(metadata.contains("\"stabilization_mode\": \"off\""))
+            assertTrue(metadata.contains("\"focus_mode\": \"continuous\""))
         }
 
         outputDir.deleteRecursively()

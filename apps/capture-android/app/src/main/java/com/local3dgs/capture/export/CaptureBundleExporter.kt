@@ -1,6 +1,7 @@
 package com.local3dgs.capture.export
 
 import com.local3dgs.capture.capture.ImuCaptureSnapshot
+import com.local3dgs.capture.capture.RecordedVideo
 import com.local3dgs.capture.model.CameraSample
 import com.local3dgs.capture.model.CaptureEvent
 import com.local3dgs.capture.model.CaptureMetadata
@@ -51,6 +52,8 @@ class CaptureBundleExporter(
             bitrateBps = 8_000_000,
             startedMonotonicNs = 1_000,
             stoppedMonotonicNs = 1_001_000_000,
+            stabilizationMode = "off",
+            focusMode = "continuous",
             zoomRatio = 1.0f,
             scalerCropRegion = listOf(0, 0, 1920, 1080),
             aeLockEnabled = true,
@@ -91,6 +94,8 @@ class CaptureBundleExporter(
             bitrateBps = 8_000_000,
             startedMonotonicNs = snapshot.startedMonotonicNs,
             stoppedMonotonicNs = snapshot.stoppedMonotonicNs,
+            stabilizationMode = "off",
+            focusMode = "continuous",
             zoomRatio = 1.0f,
             scalerCropRegion = listOf(0, 0, 1920, 1080),
             aeLockEnabled = true,
@@ -108,6 +113,59 @@ class CaptureBundleExporter(
         return writeZip(outputDir, captureId, payloads)
     }
 
+    fun exportRecordedSessionBundle(outputDir: File, snapshot: ImuCaptureSnapshot, recordedVideo: RecordedVideo): File {
+        outputDir.mkdirs()
+        if (!recordedVideo.file.exists() || recordedVideo.file.length() <= 0) {
+            throw IllegalArgumentException("recorded video is missing or empty")
+        }
+        val captureId = "capture_video_${System.currentTimeMillis()}"
+        val durationUs = ((snapshot.stoppedMonotonicNs - snapshot.startedMonotonicNs).coerceAtLeast(0L)) / 1_000L
+        val metadata = CaptureMetadata(
+            schemaVersion = "1.0",
+            captureId = captureId,
+            appVersion = "0.1.0",
+            platform = "android",
+            deviceManufacturer = android.os.Build.MANUFACTURER ?: "unknown",
+            deviceModel = android.os.Build.MODEL ?: "unknown",
+            androidApiLevel = android.os.Build.VERSION.SDK_INT,
+            cameraId = recordedVideo.cameraId,
+            lensFacing = recordedVideo.lensFacing,
+            sensorOrientationDegrees = recordedVideo.sensorOrientationDegrees,
+            videoWidth = recordedVideo.width,
+            videoHeight = recordedVideo.height,
+            targetFps = recordedVideo.fps,
+            actualVideoDurationUs = durationUs.coerceAtLeast(1L),
+            videoCodec = recordedVideo.codec,
+            bitrateBps = recordedVideo.bitrateBps.toLong(),
+            startedMonotonicNs = snapshot.startedMonotonicNs,
+            stoppedMonotonicNs = snapshot.stoppedMonotonicNs,
+            stabilizationMode = recordedVideo.stabilizationMode,
+            focusMode = recordedVideo.focusMode,
+            zoomRatio = 1.0f,
+            scalerCropRegion = listOf(0, 0, recordedVideo.width, recordedVideo.height),
+            aeLockEnabled = true,
+            afLockEnabled = true,
+            awbLockEnabled = true
+        )
+        val frameTimestamps = buildFrameTimestamps(snapshot, recordedVideo.fps)
+        val cameraSamples = frameTimestamps.map { frame ->
+            CameraSample(
+                sensorTimestampNs = frame.sensorTimestampNs ?: frame.monotonicNs ?: snapshot.startedMonotonicNs,
+                zoomRatio = 1.0f,
+                scalerCropRegion = listOf(0, 0, recordedVideo.width, recordedVideo.height)
+            )
+        }
+        val payloads = buildPayloads(
+            videoBytes = recordedVideo.file.readBytes(),
+            metadata = metadata,
+            frameTimestamps = frameTimestamps,
+            cameraSamples = cameraSamples,
+            imuSamples = snapshot.imuSamples,
+            events = snapshot.events
+        )
+        return writeZip(outputDir, captureId, payloads)
+    }
+
     private fun buildPayloads(
         metadata: CaptureMetadata,
         frameTimestamps: List<FrameTimestamp>,
@@ -115,8 +173,26 @@ class CaptureBundleExporter(
         imuSamples: List<ImuSample>,
         events: List<CaptureEvent>
     ): LinkedHashMap<String, ByteArray> {
+        return buildPayloads(
+            videoBytes = "video placeholder\n".toByteArray(Charsets.UTF_8),
+            metadata = metadata,
+            frameTimestamps = frameTimestamps,
+            cameraSamples = cameraSamples,
+            imuSamples = imuSamples,
+            events = events
+        )
+    }
+
+    private fun buildPayloads(
+        videoBytes: ByteArray,
+        metadata: CaptureMetadata,
+        frameTimestamps: List<FrameTimestamp>,
+        cameraSamples: List<CameraSample>,
+        imuSamples: List<ImuSample>,
+        events: List<CaptureEvent>
+    ): LinkedHashMap<String, ByteArray> {
         val payloads = linkedMapOf<String, ByteArray>()
-        payloads["video.mp4"] = "video placeholder\n".toByteArray(Charsets.UTF_8)
+        payloads["video.mp4"] = videoBytes
         payloads["metadata.json"] = json.encodeToString(CaptureMetadata.serializer(), metadata).toByteArray(Charsets.UTF_8)
         payloads["frame_timestamps.jsonl"] = jsonl(FrameTimestamp.serializer(), frameTimestamps)
         payloads["camera_samples.jsonl"] = jsonl(CameraSample.serializer(), cameraSamples)
@@ -127,6 +203,30 @@ class CaptureBundleExporter(
             ChecksumManifest(payloads.mapValues { (_, bytes) -> sha256(bytes) })
         ).toByteArray(Charsets.UTF_8)
         return payloads
+    }
+
+    private fun buildFrameTimestamps(snapshot: ImuCaptureSnapshot, fps: Int): List<FrameTimestamp> {
+        val started = snapshot.startedMonotonicNs
+        val stopped = snapshot.stoppedMonotonicNs.coerceAtLeast(started)
+        val stepNs = (1_000_000_000L / fps.coerceAtLeast(1)).coerceAtLeast(1L)
+        val frames = mutableListOf<FrameTimestamp>()
+        var timestamp = started
+        var index = 0
+        while (timestamp <= stopped) {
+            frames.add(
+                FrameTimestamp(
+                    frameIndex = index,
+                    ptsUs = ((timestamp - started) / 1_000L),
+                    sensorTimestampNs = timestamp,
+                    monotonicNs = timestamp
+                )
+            )
+            timestamp += stepNs
+            index += 1
+        }
+        return frames.ifEmpty {
+            listOf(FrameTimestamp(frameIndex = 0, ptsUs = 0, sensorTimestampNs = started, monotonicNs = started))
+        }
     }
 
     private fun writeZip(outputDir: File, captureId: String, payloads: Map<String, ByteArray>): File {

@@ -67,7 +67,12 @@ def _default_ffmpeg_extractor(video_path: Path, frames_dir: Path, frame_count: i
         stderr=subprocess.PIPE,
         text=True,
     )
-    return [frames_dir / _frame_name(index) for index in range(frame_count)]
+    return [path for path in (frames_dir / _frame_name(index) for index in range(frame_count)) if path.exists()]
+
+
+def _frames_with_extracted_images(frames: list[FrameTimestamp], extracted: list[Path]) -> list[FrameTimestamp]:
+    available_indexes = {int(path.stem.rsplit("_", 1)[-1]) for path in extracted if path.exists()}
+    return [frame for frame in frames if frame.frame_index in available_indexes]
 
 
 def _sensor_flags_by_frame(windows: list[SensorWindow]) -> dict[int, list[str]]:
@@ -115,9 +120,9 @@ def prepare_capture_for_selection(
         shutil.rmtree(frames_dir)
     extractor = frame_extractor or _default_ffmpeg_extractor
     extracted = extractor(raw_dir / "video.mp4", frames_dir, len(frames))
-    missing = [path for path in extracted if not path.exists()]
-    if missing:
-        raise ValueError(f"frame extractor did not create expected frame: {missing[0]}")
+    frames = _frames_with_extracted_images(frames, extracted)
+    if not frames:
+        raise ValueError("frame extractor did not create any usable frames")
 
     windows = build_sensor_windows(frames, imu_samples, camera_samples, events)
     candidates = _build_candidates(frames, frames_dir, windows)
