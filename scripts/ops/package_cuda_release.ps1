@@ -29,7 +29,7 @@ if (Test-Path $stagingRoot) {
 
 New-Item -ItemType Directory -Force -Path $stagingRoot | Out-Null
 
-$includeDirs = @("apps", "packages", "docker", "docs", "scripts")
+$includeDirs = @("apps", "packages", "docker", "docs", "scripts", "tests")
 foreach ($dir in $includeDirs) {
     Copy-Item -LiteralPath (Join-Path $repoRoot $dir) -Destination $stagingRoot -Recurse -Force
 }
@@ -43,7 +43,7 @@ foreach ($file in $includeFiles) {
 }
 
 $cacheDirs = Get-ChildItem -LiteralPath $stagingRoot -Recurse -Directory -Force |
-    Where-Object { $_.Name -in @("__pycache__", ".pytest_cache", ".venv", "node_modules", "dist", ".gradle", "build") }
+    Where-Object { $_.Name -in @("__pycache__", ".pytest_cache", ".venv", "node_modules", "dist", ".gradle", ".kotlin", "build") }
 foreach ($cacheDir in $cacheDirs) {
     Remove-Item -LiteralPath $cacheDir.FullName -Recurse -Force
 }
