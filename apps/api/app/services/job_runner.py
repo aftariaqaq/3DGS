@@ -56,7 +56,7 @@ def run_job(job_id: str) -> None:
             job_id,
             JobStatus.EXPORTING_MODEL,
             "Exporting model",
-            lambda: model_exporter.export_scene(job_id, frame_count=frame_count),
+            lambda: model_exporter.export_scene(job_id, scene_id=f"scene_{job_id}", frame_count=frame_count),
         )
         job_store.mark_ready(job_id, scene["id"], scene["model_url"])
     except Exception:

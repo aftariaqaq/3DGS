@@ -51,7 +51,7 @@ From the project root:
 ```powershell
 docker build `
   -f docker\nerfstudio-splatfacto.Dockerfile `
-  -t nerfstudio-splatfacto:local `
+  -t 3dgs-runtime:rtx5090 `
   .
 ```
 
@@ -73,7 +73,8 @@ Docker mode:
 .\scripts\ops\run_splatfacto_cuda.ps1 `
   -JobId job_quality_006 `
   -Iterations 25000 `
-  -UseDocker
+  -UseDocker `
+  -GpuDevices "4,5,6,7"
 ```
 
 Expected outputs:
@@ -127,6 +128,20 @@ http://127.0.0.1:8000/scenes/scene_job_quality_006/viewer
 
 ```powershell
 .\scripts\ops\package_cuda_release.ps1
+```
+
+Build the offline runtime image archive on a machine that can access the selected base image and Python wheels:
+
+```powershell
+.\scripts\ops\build_runtime_image.ps1 `
+  -ImageName 3dgs-runtime:rtx5090 `
+  -TarPath artifacts\3dgs-runtime-rtx5090.tar
+```
+
+Create a repo archive for `/data/3dgs/repo`:
+
+```powershell
+.\scripts\ops\package_offline_repo.ps1 -IncludeTest1Video
 ```
 
 The package does not include `data\jobs`, videos, Docker layers, Git metadata, or local caches.

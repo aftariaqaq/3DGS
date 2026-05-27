@@ -2,7 +2,8 @@ param(
     [Parameter(Mandatory = $true)][string]$JobId,
     [int]$Iterations = 25000,
     [switch]$UseDocker,
-    [string]$ImageName = "nerfstudio-splatfacto:local"
+    [string]$ImageName = "3dgs-runtime:rtx5090",
+    [string]$GpuDevices = "4,5,6,7"
 )
 
 Set-StrictMode -Version Latest
@@ -64,7 +65,8 @@ if ($UseDocker) {
     $docker = (Get-Command "docker" -ErrorAction Stop).Source
     $repoRootDocker = ($repoRoot.Path -replace "\\", "/")
     $processCommand = @(
-        $docker, "run", "--rm", "--gpus", "all",
+        $docker, "run", "--rm", "--gpus", "device=$GpuDevices",
+        "-e", "CUDA_VISIBLE_DEVICES=0,1,2,3",
         "-v", "${repoRootDocker}:/workspace",
         "-w", "/workspace",
         $ImageName,
@@ -76,7 +78,8 @@ if ($UseDocker) {
         "--colmap-model-path", "data/jobs/$JobId/nerfstudio/data/colmap/sparse/0"
     )
     $trainCommand = @(
-        $docker, "run", "--rm", "--gpus", "all",
+        $docker, "run", "--rm", "--gpus", "device=$GpuDevices",
+        "-e", "CUDA_VISIBLE_DEVICES=0,1,2,3",
         "-v", "${repoRootDocker}:/workspace",
         "-w", "/workspace",
         $ImageName,
@@ -123,7 +126,8 @@ if ($UseDocker) {
     $repoRootDocker = ($repoRoot.Path -replace "\\", "/")
     $configPath = ($config.FullName.Substring($repoRoot.Path.Length + 1) -replace "\\", "/")
     $exportCommand = @(
-        $docker, "run", "--rm", "--gpus", "all",
+        $docker, "run", "--rm", "--gpus", "device=$GpuDevices",
+        "-e", "CUDA_VISIBLE_DEVICES=0,1,2,3",
         "-v", "${repoRootDocker}:/workspace",
         "-w", "/workspace",
         $ImageName,

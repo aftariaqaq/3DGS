@@ -29,7 +29,7 @@ def test_run_job_orchestrates_pipeline_and_marks_ready(monkeypatch, tmp_path):
     monkeypatch.setattr(
         job_runner.model_exporter,
         "export_scene",
-        lambda job_id, frame_count=None: calls.append(("export", frame_count))
+        lambda job_id, scene_id=None, frame_count=None: calls.append(("export", scene_id, frame_count))
         or {"id": "scene_001", "model_url": "/static/scenes/scene_001/scene.ply"},
     )
 
@@ -41,7 +41,7 @@ def test_run_job_orchestrates_pipeline_and_marks_ready(monkeypatch, tmp_path):
         "matching",
         "mapping",
         "splatfacto",
-        ("export", 30),
+        ("export", "scene_job_001", 30),
     ]
     job = job_store.read_job("job_001")
     assert job["status"] == JobStatus.READY

@@ -36,7 +36,7 @@ ns-export gaussian-splat --help
 ```powershell
 docker build `
   -f docker\nerfstudio-splatfacto.Dockerfile `
-  -t nerfstudio-splatfacto:local `
+  -t 3dgs-runtime:rtx5090 `
   .
 ```
 
@@ -56,7 +56,8 @@ Docker mode:
 .\scripts\ops\run_splatfacto_cuda.ps1 `
   -JobId job_quality_006 `
   -Iterations 25000 `
-  -UseDocker
+  -UseDocker `
+  -GpuDevices "4,5,6,7"
 ```
 
 Expected training outputs:
@@ -90,3 +91,21 @@ http://127.0.0.1:8000/scenes/<scene_id>/viewer
 ```
 
 The package includes source, apps, package boundaries, Dockerfiles, scripts, tests, and docs. It intentionally excludes `data/jobs`, test videos, local Docker layers, Git metadata, build outputs, and caches.
+
+## Create Offline Runtime Artifacts
+
+Build and save the runtime image:
+
+```powershell
+.\scripts\ops\build_runtime_image.ps1 `
+  -ImageName 3dgs-runtime:rtx5090 `
+  -TarPath artifacts\3dgs-runtime-rtx5090.tar
+```
+
+Create the server repo archive with `test_video/test1.mp4`:
+
+```powershell
+.\scripts\ops\package_offline_repo.ps1 -IncludeTest1Video
+```
+
+Server-side commands are documented in `docs/offline-rtx5090-runbook.md`.
