@@ -15,8 +15,8 @@ def configure_tmp_storage(monkeypatch, tmp_path: Path) -> None:
 def test_metrics_endpoint_returns_parsed_loss_points(monkeypatch, tmp_path):
     configure_tmp_storage(monkeypatch, tmp_path)
     storage.ensure_job_dirs("job_001")
-    (storage.job_logs_dir("job_001") / "opensplat.log").write_text(
-        "Step 10: 0.5 (5%)\nStep 20: 0.25 (10%)\n",
+    (storage.job_logs_dir("job_001") / "splatfacto-metrics.jsonl").write_text(
+        '{"step": 10, "loss": 0.5, "progress": 5}\n{"step": 20, "loss": 0.25, "progress": 10}\n',
         encoding="utf-8",
     )
 

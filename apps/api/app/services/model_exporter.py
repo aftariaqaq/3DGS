@@ -21,9 +21,12 @@ def export_scene(
     frame_count: int | None = None,
 ) -> dict:
     scene_id = scene_id or _new_scene_id()
-    source_ply = storage.job_opensplat_dir(job_id) / "splat.ply"
+    source_ply = storage.job_splatfacto_export_dir(job_id) / "splat.ply"
     if not source_ply.exists():
-        raise RuntimeError(f"OpenSplat output not found: {source_ply}")
+        candidates = sorted(storage.job_splatfacto_export_dir(job_id).glob("*.ply"))
+        source_ply = candidates[0] if candidates else source_ply
+    if not source_ply.exists():
+        raise RuntimeError(f"Splatfacto output not found: {source_ply}")
 
     storage.ensure_scene_dir(scene_id)
     model_type, model_path = convert_if_needed(source_ply, storage.scene_dir(scene_id))
@@ -41,4 +44,3 @@ def export_scene(
         model_url=model_url,
         stats=stats,
     )
-

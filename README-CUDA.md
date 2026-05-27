@@ -1,72 +1,91 @@
-# 3DGS CUDA-Only Quick Start
+# 3DGS Splatfacto CUDA Quick Start
 
-This workspace is now organized for NVIDIA GPU hosts only. The active runtime is under `apps/api`, CUDA operations live in `scripts/ops`, and historical CPU prototype assets are kept under `scripts/legacy` and `docker/legacy`.
+This workspace targets NVIDIA GPU hosts and uses Nerfstudio + Splatfacto as the only supported 3DGS training backend.
 
-## 1. Required Host Software
+## 1. Pipeline
 
-Install these on the target machine before running the pipeline:
+```text
+Android capture or video import
+-> frame extraction and quality selection
+-> COLMAP CUDA sparse reconstruction
+-> ns-train splatfacto
+-> ns-export gaussian-splat
+-> web metrics and 3DGS viewer
+```
 
-- NVIDIA driver. `nvidia-smi` must work in a terminal.
-- Docker Desktop or Docker Engine.
-- NVIDIA Container Toolkit. Docker must support `docker run --gpus all ...`.
+## 2. Required Host Software
+
+Install these on the target machine:
+
+- NVIDIA driver. `nvidia-smi` must work.
+- Python 3.10-3.12 environment compatible with Nerfstudio.
+- PyTorch with CUDA support for the target GPU.
+- Nerfstudio with `ns-train` and `ns-export`.
 - FFmpeg.
-- COLMAP.
-- Python 3.12 or a compatible Python 3 version.
+- COLMAP with CUDA support.
+- Optional: Docker with NVIDIA Container Toolkit.
 
 Quick checks:
 
 ```powershell
 nvidia-smi
-docker run --rm --gpus all nvidia/cuda:12.1.1-base-ubuntu22.04 nvidia-smi
+python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 ffmpeg -version
 colmap -h
-python --version
+ns-train splatfacto --help
+ns-export gaussian-splat --help
 ```
 
-## 2. Check The Host
+For RTX 5090 / Blackwell, prefer a recent NVIDIA driver and a PyTorch CUDA build that explicitly supports the installed driver/runtime combination.
+
+## 3. Check The Host
 
 ```powershell
 .\scripts\ops\check_environment.ps1
 ```
 
-## 3. Build CUDA OpenSplat Image
+## 4. Optional Docker Image
 
 From the project root:
 
 ```powershell
-.\scripts\ops\build_opensplat_cuda_docker.ps1 `
-  -ImageName opensplat-cuda:local `
-  -CudaVersion 12.1.1 `
-  -TorchVersion 2.2.1 `
-  -CudaArchitectures "75;80;86;89"
+docker build `
+  -f docker\nerfstudio-splatfacto.Dockerfile `
+  -t nerfstudio-splatfacto:local `
+  .
 ```
 
-CUDA architecture hints:
+Native Python environments are preferred while validating RTX 5090 compatibility because PyTorch/CUDA support can move faster than project Docker defaults.
 
-```text
-RTX 20xx / Turing: 75
-RTX 30xx / Ampere: 86
-A100 / Ampere datacenter: 80
-RTX 40xx / Ada: 89
-H100 / Hopper: 90
-```
+## 5. Re-run Splatfacto With Existing COLMAP
 
-Use a semicolon-separated list if you want the image to support multiple GPU families.
-
-## 4. Re-run Only OpenSplat CUDA With Existing COLMAP
-
-Use this when `data\jobs\<job_id>\images` and `data\jobs\<job_id>\colmap` already exist:
+Use this when `data\jobs\<job_id>\images` and `data\jobs\<job_id>\colmap\sparse\0` already exist:
 
 ```powershell
-.\scripts\ops\run_opensplat_cuda_only.ps1 `
-  -JobId job_cuda_001 `
-  -Iterations 4000 `
-  -OpenSplatDownscaleFactor 2 `
-  -OpenSplatNumDownscales 2 `
-  -ImageName opensplat-cuda:local
+.\scripts\ops\run_splatfacto_cuda.ps1 `
+  -JobId job_quality_006 `
+  -Iterations 25000
 ```
 
-## 5. Start Web API And Viewer
+Docker mode:
+
+```powershell
+.\scripts\ops\run_splatfacto_cuda.ps1 `
+  -JobId job_quality_006 `
+  -Iterations 25000 `
+  -UseDocker
+```
+
+Expected outputs:
+
+```text
+data/jobs/<job_id>/nerfstudio/outputs/**/config.yml
+data/jobs/<job_id>/nerfstudio/exports/*.ply
+data/jobs/<job_id>/logs/splatfacto.log
+data/jobs/<job_id>/logs/splatfacto-export.log
+```
+
+## 6. Start Web API And Viewer
 
 Install Python dependencies:
 
@@ -93,7 +112,7 @@ If you trained from the command line and need to export a scene manually:
 $env:PYTHONPATH="$PWD\apps\api"
 @'
 from app.services import model_exporter
-scene = model_exporter.export_scene("job_cuda_001", scene_id="scene_job_cuda_001", frame_count=1000)
+scene = model_exporter.export_scene("job_quality_006", scene_id="scene_job_quality_006", frame_count=700)
 print(scene)
 '@ | python -
 ```
@@ -101,18 +120,20 @@ print(scene)
 Then open:
 
 ```text
-http://127.0.0.1:8000/scenes/scene_job_cuda_001/viewer
+http://127.0.0.1:8000/scenes/scene_job_quality_006/viewer
 ```
 
-## 6. Package For A GPU Host
+## 7. Package For A GPU Host
 
 ```powershell
 .\scripts\ops\package_cuda_release.ps1
 ```
 
-## 7. Important Notes
+The package does not include `data\jobs`, videos, Docker layers, Git metadata, or local caches.
 
-- CPU execution is no longer an active path in this workspace.
-- The API still exposes the current web upload, metrics, and viewer surfaces while the training backend is being moved toward Nerfstudio Splatfacto.
-- The package does not include `data\jobs`, videos, Docker layers, or Git metadata.
+## 8. Notes
+
+- CPU training is not an active path.
+- Training quality still depends on capture sharpness, frame selection, and COLMAP pose quality.
+- Splatfacto should be initialized from COLMAP/SfM points for this workflow.
 - Detailed migration notes live in `docs\cuda-migration.md`.

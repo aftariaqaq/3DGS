@@ -1,6 +1,6 @@
 # Splatfacto
 
-Owns the Nerfstudio Splatfacto training path.
+Owns the only supported Gaussian Splat training path.
 
 Target responsibilities:
 
@@ -8,5 +8,3 @@ Target responsibilities:
 - Run `ns-train splatfacto` with CUDA-only assumptions.
 - Stream loss and quality metrics into the job metrics API.
 - Export browser-viewable splat assets.
-
-OpenSplat CUDA is retained as a fallback while this package becomes the primary trainer.

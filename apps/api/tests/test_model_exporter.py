@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from app.services import job_store, model_exporter, scene_store, storage
 
 
@@ -17,7 +19,7 @@ def configure_tmp_storage(monkeypatch, tmp_path: Path) -> None:
 def test_export_scene_copies_ply_and_writes_metadata(monkeypatch, tmp_path):
     configure_tmp_storage(monkeypatch, tmp_path)
     storage.ensure_job_dirs("job_001")
-    source = storage.job_opensplat_dir("job_001") / "splat.ply"
+    source = storage.job_splatfacto_export_dir("job_001") / "splat.ply"
     source.write_text("ply data", encoding="utf-8")
 
     metadata = model_exporter.export_scene("job_001", scene_id="scene_001", frame_count=30)
@@ -36,10 +38,17 @@ def test_export_scene_copies_ply_and_writes_metadata(monkeypatch, tmp_path):
 def test_export_scene_generates_scene_id_when_not_provided(monkeypatch, tmp_path):
     configure_tmp_storage(monkeypatch, tmp_path)
     storage.ensure_job_dirs("job_001")
-    (storage.job_opensplat_dir("job_001") / "splat.ply").write_text("ply data", encoding="utf-8")
+    (storage.job_splatfacto_export_dir("job_001") / "splat.ply").write_text("ply data", encoding="utf-8")
 
     metadata = model_exporter.export_scene("job_001")
 
     assert metadata["id"].startswith("scene_")
     assert (storage.scene_dir(metadata["id"]) / "scene.ply").is_file()
 
+
+def test_export_scene_errors_when_splatfacto_output_missing(monkeypatch, tmp_path):
+    configure_tmp_storage(monkeypatch, tmp_path)
+    storage.ensure_job_dirs("job_001")
+
+    with pytest.raises(RuntimeError, match="Splatfacto output not found"):
+        model_exporter.export_scene("job_001")

@@ -1,6 +1,6 @@
 # Docker Images
 
-- `opensplat-cuda.Dockerfile`: supported CUDA OpenSplat fallback image.
-- `legacy/opensplat-cpu.Dockerfile`: historical CPU prototype image.
+- `nerfstudio-splatfacto.Dockerfile`: supported CUDA Nerfstudio + Splatfacto image.
+- `legacy/opensplat-cpu.Dockerfile`: historical CPU prototype image, retained only for old experiment archaeology.
 
-The primary target path is Nerfstudio Splatfacto on CUDA; OpenSplat CUDA remains available for continuity while that path is integrated.
+The active training path is Nerfstudio Splatfacto on CUDA.

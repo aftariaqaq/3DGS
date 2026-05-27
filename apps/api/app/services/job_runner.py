@@ -4,7 +4,7 @@ from app.services import (
     ffmpeg_runner,
     job_store,
     model_exporter,
-    opensplat_runner,
+    splatfacto_runner,
 )
 
 
@@ -49,8 +49,8 @@ def run_job(job_id: str) -> None:
         _run_stage(
             job_id,
             JobStatus.TRAINING_SPLAT,
-            "CUDA splat training",
-            lambda: opensplat_runner.run_opensplat(job_id, job["iterations"]),
+            "Splatfacto training",
+            lambda: splatfacto_runner.run_splatfacto(job_id, job["iterations"]),
         )
         scene = _run_stage(
             job_id,

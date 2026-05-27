@@ -43,14 +43,22 @@ $checks = @(
         )
     },
     @{
-        Name = "opensplat"
-        Command = "opensplat.exe"
+        Name = "ns-process-data"
+        Command = "ns-process-data"
         Arguments = @("--help")
-        FallbackPaths = @(
-            "$repoRoot\tools\opensplat\opensplat.exe",
-            "$localToolsRoot\opensplat\opensplat.exe"
-        )
-        DockerImage = "opensplat-cuda:local"
+        FallbackPaths = @()
+    },
+    @{
+        Name = "ns-train"
+        Command = "ns-train"
+        Arguments = @("--help")
+        FallbackPaths = @()
+    },
+    @{
+        Name = "ns-export"
+        Command = "ns-export"
+        Arguments = @("--help")
+        FallbackPaths = @()
     }
 )
 

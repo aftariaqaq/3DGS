@@ -43,7 +43,7 @@ foreach ($file in $includeFiles) {
 }
 
 $cacheDirs = Get-ChildItem -LiteralPath $stagingRoot -Recurse -Directory -Force |
-    Where-Object { $_.Name -in @("__pycache__", ".pytest_cache", ".venv", "node_modules", "dist", ".gradle", ".kotlin", "build") }
+    Where-Object { $_.Name -in @("__pycache__", ".pytest_cache", ".venv", "node_modules", "dist", ".gradle", ".kotlin", "build", "legacy") }
 foreach ($cacheDir in $cacheDirs) {
     Remove-Item -LiteralPath $cacheDir.FullName -Recurse -Force
 }
@@ -56,6 +56,16 @@ foreach ($compiledPythonFile in $compiledPythonFiles) {
 $localPropertiesFiles = Get-ChildItem -LiteralPath $stagingRoot -Recurse -File -Force -Filter "local.properties"
 foreach ($localPropertiesFile in $localPropertiesFiles) {
     Remove-Item -LiteralPath $localPropertiesFile.FullName -Force
+}
+
+$historicalDocs = @(
+    (Join-Path $stagingRoot "docs\superpowers"),
+    (Join-Path $stagingRoot "docs\phase-1-verification.md")
+)
+foreach ($historicalDoc in $historicalDocs) {
+    if (Test-Path $historicalDoc) {
+        Remove-Item -LiteralPath $historicalDoc -Recurse -Force
+    }
 }
 
 if (Test-Path $archivePath) {

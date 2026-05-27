@@ -22,9 +22,9 @@ def test_run_job_orchestrates_pipeline_and_marks_ready(monkeypatch, tmp_path):
     monkeypatch.setattr(job_runner.colmap_runner, "run_sequential_matcher", lambda job_id: calls.append("matching"))
     monkeypatch.setattr(job_runner.colmap_runner, "run_mapper", lambda job_id: calls.append("mapping"))
     monkeypatch.setattr(
-        job_runner.opensplat_runner,
-        "run_opensplat",
-        lambda job_id, iterations: calls.append("opensplat_cuda") or Path("splat.ply"),
+        job_runner.splatfacto_runner,
+        "run_splatfacto",
+        lambda job_id, max_num_iterations: calls.append("splatfacto") or Path("splat.ply"),
     )
     monkeypatch.setattr(
         job_runner.model_exporter,
@@ -40,7 +40,7 @@ def test_run_job_orchestrates_pipeline_and_marks_ready(monkeypatch, tmp_path):
         "features",
         "matching",
         "mapping",
-        "opensplat_cuda",
+        "splatfacto",
         ("export", 30),
     ]
     job = job_store.read_job("job_001")

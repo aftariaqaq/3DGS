@@ -23,11 +23,15 @@ def test_ensure_job_dirs_creates_expected_layout(monkeypatch, tmp_path):
         "images",
         "colmap",
         "colmap/sparse",
-        "opensplat",
+        "nerfstudio",
+        "nerfstudio/data",
+        "nerfstudio/outputs",
+        "nerfstudio/exports",
         "web",
         "logs",
     ]:
         assert (tmp_path / "jobs" / "job_001" / relative_path).is_dir()
+    assert not (tmp_path / "jobs" / "job_001" / "opensplat").exists()
 
 
 def test_job_store_lifecycle(monkeypatch, tmp_path):
@@ -84,4 +88,3 @@ def test_scene_store_creates_reads_and_lists_metadata(monkeypatch, tmp_path):
     assert first["model_type"] == "ply"
     assert scene_store.read_scene("scene_001")["model_url"] == "/static/scenes/scene_001/scene.ply"
     assert [scene["id"] for scene in scene_store.list_scenes()] == ["scene_001", "scene_002"]
-

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.services import colmap_runner, ffmpeg_runner, opensplat_runner, storage
+from app.services import colmap_runner, ffmpeg_runner, storage
 
 
 def configure_tmp_storage(monkeypatch, tmp_path: Path) -> None:
@@ -8,7 +8,6 @@ def configure_tmp_storage(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(storage, "SCENES_DIR", tmp_path / "scenes")
     monkeypatch.setattr(ffmpeg_runner.storage, "JOBS_DIR", tmp_path / "jobs")
     monkeypatch.setattr(colmap_runner.storage, "JOBS_DIR", tmp_path / "jobs")
-    monkeypatch.setattr(opensplat_runner.storage, "JOBS_DIR", tmp_path / "jobs")
 
 
 def test_extract_frames_runs_ffmpeg_and_limits_frames(monkeypatch, tmp_path):
@@ -60,25 +59,3 @@ def test_colmap_runner_uses_cuda_feature_and_matching(monkeypatch, tmp_path):
     assert "--SequentialMatching.overlap" in calls[1]
     assert calls[2][1] == "mapper"
     assert "--Mapper.ba_global_max_num_iterations" in calls[2]
-
-
-def test_opensplat_runner_uses_docker_and_returns_output(monkeypatch, tmp_path):
-    configure_tmp_storage(monkeypatch, tmp_path)
-    storage.ensure_job_dirs("job_001")
-    calls = []
-
-    def fake_run_command(args, log_path, cwd=None):
-        calls.append(args)
-        (storage.job_opensplat_dir("job_001") / "splat.ply").write_text("ply", encoding="utf-8")
-
-    monkeypatch.setattr(opensplat_runner, "run_command", fake_run_command)
-
-    result = opensplat_runner.run_opensplat("job_001", iterations=50)
-
-    assert result == storage.job_opensplat_dir("job_001") / "splat.ply"
-    assert calls[0][0] == "docker"
-    assert "opensplat-cuda:local" in calls[0]
-    assert "--gpus" in calls[0]
-    assert "--cpu" not in calls[0]
-    assert "--colmap-image-path" in calls[0]
-    assert "/work/colmap" in calls[0]
