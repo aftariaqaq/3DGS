@@ -10,7 +10,14 @@ python --version
 python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.device_count())"
 ffmpeg -version | head -1
 ffprobe -version | head -1
-colmap -h >/tmp/colmap-help.txt && echo "colmap ok"
+colmap -h > /tmp/colmap-help.txt 2>&1
+if grep -qi "without CUDA" /tmp/colmap-help.txt; then
+  cat /tmp/colmap-help.txt
+  echo "colmap was built without CUDA" >&2
+  exit 1
+fi
+grep -Ei "with CUDA|CUDA" /tmp/colmap-help.txt || true
+echo "colmap cuda ok"
 ns-process-data images --help >/tmp/ns-process-data-help.txt && echo "ns-process-data ok"
 ns-train splatfacto --help >/tmp/ns-train-help.txt && echo "ns-train splatfacto ok"
 ns-export gaussian-splat --help >/tmp/ns-export-help.txt && echo "ns-export gaussian-splat ok"

@@ -17,7 +17,7 @@ def test_run_job_orchestrates_pipeline_and_marks_ready(monkeypatch, tmp_path):
     job_store.create_job("job_001", fps=1, max_frames=30, iterations=50)
     calls = []
 
-    monkeypatch.setattr(job_runner.ffmpeg_runner, "extract_frames", lambda job_id, fps, max_frames: calls.append("frames") or 30)
+    monkeypatch.setattr(job_runner.video_pipeline, "process_job_video", lambda job_id, fps, max_frames: calls.append("frames") or 30)
     monkeypatch.setattr(job_runner.colmap_runner, "run_feature_extractor", lambda job_id: calls.append("features"))
     monkeypatch.setattr(job_runner.colmap_runner, "run_sequential_matcher", lambda job_id: calls.append("matching"))
     monkeypatch.setattr(job_runner.colmap_runner, "run_mapper", lambda job_id: calls.append("mapping"))
@@ -57,7 +57,7 @@ def test_run_job_marks_failed_on_exception(monkeypatch, tmp_path):
     def fail_features(job_id):
         raise RuntimeError("feature extraction failed")
 
-    monkeypatch.setattr(job_runner.ffmpeg_runner, "extract_frames", lambda job_id, fps, max_frames: 30)
+    monkeypatch.setattr(job_runner.video_pipeline, "process_job_video", lambda job_id, fps, max_frames: 30)
     monkeypatch.setattr(job_runner.colmap_runner, "run_feature_extractor", fail_features)
 
     job_runner.run_job("job_001")

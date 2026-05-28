@@ -36,3 +36,25 @@ def test_create_job_from_capture_writes_selected_images_and_reports(tmp_path):
     assert (job_root / "capture" / "frame_scores.jsonl").exists()
     assert (job_root / "capture" / "sensor_windows.jsonl").exists()
     assert (job_root / "capture" / "import_report.json").exists()
+
+
+def test_create_job_from_capture_preserves_existing_job_metadata_and_input(tmp_path):
+    capture_root = tmp_path / "captures" / "capture_001"
+    frames_dir = capture_root / "normalized" / "frames"
+    frames_dir.mkdir(parents=True)
+    (frames_dir / "frame_000000.jpg").write_text("frame", encoding="utf-8")
+    write_jsonl(
+        capture_root / "normalized" / "frame_decisions.jsonl",
+        [FrameDecision(frame_index=0, timestamp_ns=0, selected=True, score=0.9, reasons=["selected"])],
+    )
+
+    job_root = tmp_path / "jobs" / "job_capture_001"
+    (job_root / "input").mkdir(parents=True)
+    (job_root / "input" / "input.mp4").write_text("video", encoding="utf-8")
+    (job_root / "job.json").write_text('{"id":"job_capture_001"}', encoding="utf-8")
+
+    create_job_from_capture(capture_root, tmp_path / "jobs", job_id="job_capture_001", max_frames=1)
+
+    assert (job_root / "job.json").read_text(encoding="utf-8") == '{"id":"job_capture_001"}'
+    assert (job_root / "input" / "input.mp4").read_text(encoding="utf-8") == "video"
+    assert (job_root / "images" / "frame_000000.jpg").exists()

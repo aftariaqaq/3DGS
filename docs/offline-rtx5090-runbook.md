@@ -39,6 +39,7 @@ bash scripts/server/validate_runtime.sh
 ```
 
 The validation must report exactly four CUDA devices inside the container.
+It must also reject any COLMAP build that reports `without CUDA`.
 
 ## 4. Create Or Refresh `test1`
 
@@ -53,6 +54,18 @@ This creates:
 /data/3dgs/repo/data/jobs/test1/input/input.mp4
 /data/3dgs/repo/data/jobs/test1/job.json
 ```
+
+During training, the job runner imports this single video through the same offline selection path used by capture bundles:
+
+```text
+input/input.mp4
+-> process-video --no-sensors semantics
+-> data/captures/video_test1/raw/frame_timestamps.jsonl
+-> image quality and timing keyframe selection
+-> data/jobs/test1/images
+```
+
+The legacy behavior that extracted frames and kept the first N images is not part of the active pipeline.
 
 ## 5. Start API Monitoring
 

@@ -9,4 +9,4 @@ Target responsibilities:
 - Select a bounded training set before COLMAP.
 - Persist selection metadata so training runs are reproducible.
 
-Current implementation is still inside `apps/api/app/services/ffmpeg_runner.py`; this package is the boundary for the next extraction step.
+`packages.pipeline.prepare_capture` owns the current host implementation. Android capture bundles and plain video imports both normalize into the same capture layout before selection. Plain video uses `process-video --no-sensors`, which derives frame timestamps from `ffprobe` and writes empty sensor streams.

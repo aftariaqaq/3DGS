@@ -34,8 +34,9 @@ def create_job_from_capture(capture_root: Path, jobs_root: Path, job_id: str, ma
     if not decisions_path.exists():
         raise ValueError(f"frame decisions file not found: {decisions_path}")
 
-    if job_root.exists():
-        shutil.rmtree(job_root)
+    for refresh_dir in (images_dir, capture_dir):
+        if refresh_dir.exists():
+            shutil.rmtree(refresh_dir)
     images_dir.mkdir(parents=True)
     capture_dir.mkdir(parents=True)
 
@@ -70,4 +71,3 @@ def create_job_from_capture(capture_root: Path, jobs_root: Path, job_id: str, ma
     _copy_import_report(capture_root, capture_dir)
 
     return job_root
-

@@ -1,10 +1,10 @@
 from app.models import JobStatus
 from app.services import (
     colmap_runner,
-    ffmpeg_runner,
     job_store,
     model_exporter,
     splatfacto_runner,
+    video_pipeline,
 )
 
 
@@ -25,8 +25,8 @@ def run_job(job_id: str) -> None:
         frame_count = _run_stage(
             job_id,
             JobStatus.EXTRACTING_FRAMES,
-            "Extracting frames",
-            lambda: ffmpeg_runner.extract_frames(job_id, job["fps"], job["max_frames"]),
+            "Processing video and selecting keyframes",
+            lambda: video_pipeline.process_job_video(job_id, job["fps"], job["max_frames"]),
         )
         _run_stage(
             job_id,

@@ -5,7 +5,11 @@ from PIL import Image
 from packages.capture_schema.jsonl import read_jsonl, write_jsonl
 from packages.capture_schema.models import CameraSample, CaptureEvent, FrameTimestamp, ImuSample
 from packages.pipeline.__main__ import main
-from packages.pipeline.prepare_capture import prepare_and_create_job, prepare_capture_for_selection
+from packages.pipeline.prepare_capture import (
+    prepare_and_create_job,
+    prepare_capture_for_selection,
+    process_video_to_job,
+)
 
 
 def _write_image(path: Path, pixels: list[list[int]]) -> None:
@@ -158,3 +162,56 @@ def test_prepare_and_create_job_runs_full_host_selection_pipeline(tmp_path):
     assert (job_root / "images" / "frame_000000.jpg").exists()
     assert (job_root / "capture" / "selected_frames.jsonl").exists()
     assert read_jsonl(job_root / "capture" / "selected_frames.jsonl")[0]["frame_index"] == 0
+
+
+def test_process_video_to_job_creates_no_sensor_capture_and_selected_job(tmp_path):
+    source_video = tmp_path / "input.mp4"
+    source_video.write_bytes(b"fake video")
+
+    def fake_probe(video_path: Path, fps: int):
+        assert video_path == source_video
+        assert fps == 2
+        return {
+            "width": 1920,
+            "height": 1080,
+            "target_fps": 2,
+            "duration_us": 1_000_000,
+            "codec": "h264",
+            "bitrate_bps": 4_000_000,
+            "frames": [
+                FrameTimestamp(frame_index=0, pts_us=0, monotonic_ns=0),
+                FrameTimestamp(frame_index=1, pts_us=500_000, monotonic_ns=500_000_000),
+                FrameTimestamp(frame_index=2, pts_us=1_000_000, monotonic_ns=1_000_000_000),
+            ],
+        }
+
+    def fake_extractor(video_path: Path, frames_dir: Path, frame_count: int, fps: int | None = None) -> list[Path]:
+        assert video_path.name == "video.mp4"
+        assert frame_count == 3
+        assert fps == 2
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        paths = [frames_dir / f"frame_{index:06d}.jpg" for index in range(frame_count)]
+        _write_image(paths[0], [[0, 255, 0], [255, 128, 255], [0, 255, 0]])
+        _write_image(paths[1], [[255, 0, 255], [0, 128, 0], [255, 0, 255]])
+        _write_image(paths[2], [[0, 0, 255], [255, 128, 0], [0, 255, 0]])
+        return paths
+
+    job_root = process_video_to_job(
+        source_video,
+        tmp_path / "captures",
+        tmp_path / "jobs",
+        job_id="job_video_001",
+        fps=2,
+        max_frames=2,
+        probe_video=fake_probe,
+        frame_extractor=fake_extractor,
+    )
+
+    capture_root = tmp_path / "captures" / "video_job_video_001"
+    assert (capture_root / "raw" / "video.mp4").read_bytes() == b"fake video"
+    assert read_jsonl(capture_root / "raw" / "imu_samples.jsonl") == []
+    assert read_jsonl(capture_root / "raw" / "camera_samples.jsonl") == []
+    assert read_jsonl(capture_root / "raw" / "frame_timestamps.jsonl")[1]["pts_us"] == 500_000
+    assert (job_root / "capture" / "selected_frames.jsonl").exists()
+    assert len(list((job_root / "images").glob("*.jpg"))) == 2
+    assert read_jsonl(capture_root / "normalized" / "frame_decisions.jsonl")[0]["reasons"] == ["selected"]
