@@ -49,6 +49,48 @@ def test_read_training_metrics_parses_splatfacto_text_log(monkeypatch, tmp_path)
     assert metrics["latest_loss"] == 0.222
 
 
+def test_read_training_metrics_prefers_tensorboard_events(monkeypatch, tmp_path):
+    configure_tmp_storage(monkeypatch, tmp_path)
+    storage.ensure_job_dirs("job_001")
+    events_dir = storage.job_nerfstudio_outputs_dir("job_001") / "job_001" / "splatfacto" / "2026-05-27_123513"
+    events_dir.mkdir(parents=True)
+    events_path = events_dir / "events.out.tfevents.fake"
+    events_path.write_text("event placeholder", encoding="utf-8")
+    (storage.job_logs_dir("job_001") / "splatfacto.log").write_text(
+        "training started but no loss text here\n",
+        encoding="utf-8",
+    )
+
+    class FakeEvent:
+        def __init__(self, step: int, value: float):
+            self.step = step
+            self.value = value
+
+    class FakeAccumulator:
+        def __init__(self, path: str):
+            assert path == str(events_path)
+
+        def Reload(self):
+            return self
+
+        def Tags(self):
+            return {"scalars": ["Train Loss", "Train Loss Dict/main_loss"]}
+
+        def Scalars(self, tag: str):
+            assert tag == "Train Loss"
+            return [FakeEvent(0, 0.9), FakeEvent(10, 0.25), FakeEvent(20, 0.125)]
+
+    monkeypatch.setattr(metrics_reader, "EventAccumulator", FakeAccumulator)
+
+    metrics = metrics_reader.read_training_metrics("job_001")
+
+    assert metrics["source"] == "tensorboard"
+    assert metrics["latest_step"] == 20
+    assert metrics["latest_loss"] == 0.125
+    assert metrics["progress"] == 0
+    assert metrics["points"][-1] == {"step": 20, "loss": 0.125, "progress": 0}
+
+
 def test_read_training_metrics_handles_missing_log(monkeypatch, tmp_path):
     configure_tmp_storage(monkeypatch, tmp_path)
     storage.ensure_job_dirs("job_001")

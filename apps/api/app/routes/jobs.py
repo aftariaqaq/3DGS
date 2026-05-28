@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
 from app.services import scene_store
+from app.services.colmap_metrics_reader import read_colmap_metrics
 from app.services.metrics_reader import read_training_metrics
 
 router = APIRouter()
@@ -10,6 +11,11 @@ router = APIRouter()
 @router.get("/api/jobs/{job_id}/metrics")
 def get_job_metrics(job_id: str) -> dict:
     return read_training_metrics(job_id)
+
+
+@router.get("/api/jobs/{job_id}/colmap-metrics")
+def get_job_colmap_metrics(job_id: str) -> dict:
+    return read_colmap_metrics(job_id)
 
 
 @router.get("/jobs/{job_id}/metrics-view", response_class=HTMLResponse)
@@ -114,7 +120,7 @@ def get_job_metrics_view(job_id: str) -> str:
     </div>
   </header>
   <main>
-    <div class="chart" id="chart"><div class="empty">Waiting for training loss output...</div></div>
+    <div class="chart" id="chart"><div class="empty">Waiting for training scalar output...</div></div>
   </main>
   <script>
     const metricsUrl = "{metrics_url}";
@@ -129,7 +135,7 @@ def get_job_metrics_view(job_id: str) -> str:
 
     function render(points) {{
       if (!points.length) {{
-        chart.innerHTML = '<div class="empty">Waiting for training loss output...</div>';
+        chart.innerHTML = '<div class="empty">Waiting for TensorBoard training scalar output...</div>';
         return;
       }}
 
@@ -186,6 +192,147 @@ def get_job_metrics_view(job_id: str) -> str:
       lossEl.textContent = formatLoss(metrics.latest_loss);
       progressEl.textContent = `${{metrics.progress ?? 0}}%`;
       render(metrics.points ?? []);
+    }}
+
+    refresh().catch(console.error);
+    setInterval(() => refresh().catch(console.error), 2000);
+  </script>
+</body>
+</html>"""
+
+
+@router.get("/jobs/{job_id}/colmap-view", response_class=HTMLResponse)
+def get_job_colmap_view(job_id: str) -> str:
+    metrics_url = f"/api/jobs/{job_id}/colmap-metrics"
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>COLMAP Monitor - {job_id}</title>
+  <style>
+    :root {{
+      color-scheme: dark;
+      font-family: Inter, Segoe UI, Arial, sans-serif;
+      background: #111318;
+      color: #e6e8ee;
+    }}
+    body {{
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }}
+    header {{
+      padding: 18px 22px;
+      border-bottom: 1px solid #2b303b;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+    }}
+    h1 {{
+      font-size: 18px;
+      margin: 0;
+      font-weight: 650;
+    }}
+    main {{
+      padding: 18px 22px 24px;
+      display: grid;
+      gap: 14px;
+    }}
+    .stats {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }}
+    .metric {{
+      border: 1px solid #2b303b;
+      background: #171a21;
+      border-radius: 8px;
+      padding: 14px;
+    }}
+    .label {{
+      color: #9aa4b5;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }}
+    .value {{
+      font-size: 20px;
+      font-weight: 650;
+    }}
+    .bar {{
+      height: 8px;
+      background: #252b35;
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 10px;
+    }}
+    .fill {{
+      height: 100%;
+      width: 0%;
+      background: #59c2ff;
+    }}
+    pre {{
+      margin: 0;
+      min-height: 340px;
+      max-height: 560px;
+      overflow: auto;
+      border: 1px solid #2b303b;
+      background: #0e1015;
+      border-radius: 8px;
+      padding: 14px;
+      color: #c5cbd6;
+      white-space: pre-wrap;
+      font-size: 12px;
+      line-height: 1.45;
+    }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>COLMAP Monitor</h1>
+    <div>Job: <strong>{job_id}</strong></div>
+  </header>
+  <main>
+    <section class="stats">
+      <div class="metric"><div class="label">Stage</div><div class="value" id="stage">-</div></div>
+      <div class="metric"><div class="label">Images</div><div class="value" id="images">0</div></div>
+      <div class="metric"><div class="label">Registered Images</div><div class="value" id="registered">0</div></div>
+      <div class="metric"><div class="label">Sparse Points</div><div class="value" id="points">0</div></div>
+      <div class="metric">
+        <div class="label">Feature Extraction</div><div class="value" id="feature">0%</div>
+        <div class="bar"><div class="fill" id="feature-fill"></div></div>
+      </div>
+      <div class="metric">
+        <div class="label">Matching</div><div class="value" id="matching">0%</div>
+        <div class="bar"><div class="fill" id="matching-fill"></div></div>
+      </div>
+    </section>
+    <pre id="recent-log"></pre>
+  </main>
+  <script>
+    const metricsUrl = "{metrics_url}";
+    const ids = ["stage", "images", "registered", "points", "feature", "matching", "feature-fill", "matching-fill", "recent-log"];
+    const el = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
+
+    function setProgress(name, progress) {{
+      const percent = progress?.percent ?? 0;
+      el[name].textContent = `${{percent}}%`;
+      el[`${{name}}-fill`].style.width = `${{percent}}%`;
+    }}
+
+    async function refresh() {{
+      const response = await fetch(metricsUrl, {{ cache: "no-store" }});
+      const metrics = await response.json();
+      el.stage.textContent = metrics.stage ?? "-";
+      el.images.textContent = metrics.images_total ?? 0;
+      el.registered.textContent = metrics.registered_images ?? 0;
+      el.points.textContent = metrics.sparse_points ?? 0;
+      setProgress("feature", metrics.feature_progress);
+      setProgress("matching", metrics.matching_progress);
+      el["recent-log"].textContent = metrics.recent_log || "Waiting for COLMAP logs...";
     }}
 
     refresh().catch(console.error);

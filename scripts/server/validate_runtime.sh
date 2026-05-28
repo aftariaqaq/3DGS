@@ -22,4 +22,16 @@ ns-process-data images --help >/tmp/ns-process-data-help.txt && echo "ns-process
 ns-train splatfacto --help >/tmp/ns-train-help.txt && echo "ns-train splatfacto ok"
 ns-export gaussian-splat --help >/tmp/ns-export-help.txt && echo "ns-export gaussian-splat ok"
 python -c "import fastapi, uvicorn, httpx, multipart; print(\"api deps ok\")"
+python -c "from tensorboard.backend.event_processing.event_accumulator import EventAccumulator; print(\"tensorboard events ok\")"
+'
+
+docker run --rm \
+  --network none \
+  --gpus '"device=4,5,6,7"' \
+  -e CUDA_VISIBLE_DEVICES=0,1,2,3 \
+  3dgs-runtime:rtx5090 \
+  bash -lc '
+ns-train splatfacto --help >/tmp/ns-train-offline-help.txt && echo "ns-train offline help ok"
+ns-export gaussian-splat --help >/tmp/ns-export-offline-help.txt && echo "ns-export offline help ok"
+python /opt/3dgs/prewarm_nerfstudio.py
 '

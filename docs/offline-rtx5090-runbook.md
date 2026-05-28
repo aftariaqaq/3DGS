@@ -80,6 +80,12 @@ Metrics page:
 http://10.143.2.128:8000/jobs/test1/metrics-view
 ```
 
+COLMAP monitor page:
+
+```text
+http://10.143.2.128:8000/jobs/test1/colmap-view
+```
+
 ## 6. Start Training
 
 In another terminal:
@@ -128,4 +134,7 @@ http://10.143.2.128:8000/scenes/scene_test1/viewer
 - `data/jobs/test1/nerfstudio/outputs/**/config.yml` exists.
 - `data/jobs/test1/nerfstudio/exports/*.ply` exists.
 - Metrics page is reachable during training.
+- COLMAP monitor page is reachable during feature extraction, matching, and mapping.
+- Training loss is read from Nerfstudio TensorBoard event files under `data/jobs/test1/nerfstudio/outputs`.
+- `scripts/server/validate_runtime.sh` passes its `--network none` Nerfstudio CLI checks.
 - Viewer page is reachable after export.

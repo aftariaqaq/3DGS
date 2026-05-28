@@ -8,6 +8,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 ENV CUDA_VISIBLE_DEVICES=0,1,2,3
+ENV XDG_CACHE_HOME=/opt/3dgs-cache
+ENV TORCH_HOME=/opt/3dgs-cache/torch
+ENV HF_HOME=/opt/3dgs-cache/huggingface
+ENV NERFSTUDIO_CACHE_DIR=/opt/3dgs-cache/nerfstudio
 ENV HTTP_PROXY="" HTTPS_PROXY="" ALL_PROXY="" FTP_PROXY="" \
     http_proxy="" https_proxy="" all_proxy="" ftp_proxy="" \
     NO_PROXY="localhost,127.0.0.1,::1,mirrors.aliyun.com,developer.download.nvidia.cn,download.pytorch.org,github.com" \
@@ -86,6 +90,7 @@ RUN env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u FTP_PROXY -u http_proxy -u 
 RUN env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u FTP_PROXY -u http_proxy -u https_proxy -u all_proxy -u ftp_proxy \
     python -m pip install --retries 20 --timeout 300 --prefer-binary \
     nerfstudio \
+    tensorboard \
     fastapi \
     "uvicorn[standard]" \
     httpx \
@@ -100,6 +105,8 @@ RUN colmap -h 2>&1 | tee /tmp/colmap-help.txt && ! grep -qi "without CUDA" /tmp/
 RUN ns-train splatfacto --help >/tmp/ns-train-splatfacto-help.txt
 RUN ns-export gaussian-splat --help >/tmp/ns-export-gaussian-splat-help.txt
 RUN ns-process-data images --help >/tmp/ns-process-data-images-help.txt
-RUN python -c "import fastapi, uvicorn, httpx, multipart"
+COPY scripts/runtime/prewarm_nerfstudio.py /opt/3dgs/prewarm_nerfstudio.py
+RUN python /opt/3dgs/prewarm_nerfstudio.py
+RUN python -c "import fastapi, uvicorn, httpx, multipart; from tensorboard.backend.event_processing.event_accumulator import EventAccumulator"
 
 WORKDIR /workspace
