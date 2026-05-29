@@ -2,9 +2,10 @@ import shutil
 from pathlib import Path
 
 from app import config
-from app.services import process_runner, storage
+from app.services import colmap_model_selector, process_runner, storage
 
 run_command = process_runner.run_command
+TORCH_CHECKPOINT_LOAD_ENV = {"TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD": "1"}
 
 
 def _copytree_replace(source: Path, destination: Path) -> None:
@@ -16,11 +17,12 @@ def _copytree_replace(source: Path, destination: Path) -> None:
 def _stage_nerfstudio_inputs(job_id: str) -> tuple[Path, Path, Path]:
     data_dir = storage.job_nerfstudio_data_dir(job_id)
     images_source = storage.job_images_dir(job_id)
-    colmap_model_source = storage.job_colmap_dir(job_id) / "sparse" / "0"
+    colmap_model = colmap_model_selector.select_best_sparse_model(job_id)
+    colmap_model_source = colmap_model.path
     if not images_source.exists():
         raise RuntimeError(f"job images not found: {images_source}")
     if not colmap_model_source.exists():
-        raise RuntimeError(f"COLMAP sparse/0 output not found: {colmap_model_source}")
+        raise RuntimeError(f"COLMAP sparse output not found: {colmap_model_source}")
     data_dir.mkdir(parents=True, exist_ok=True)
     images_target = data_dir / "images"
     colmap_model_target = data_dir / "colmap" / "sparse" / "0"
@@ -79,7 +81,7 @@ def run_splatfacto(job_id: str, max_num_iterations: int) -> Path:
         "--max-num-iterations",
         str(max_num_iterations),
         "--vis",
-        "viewer",
+        "viewer+tensorboard",
     ]
     run_command(train_command, storage.job_logs_dir(job_id) / "splatfacto.log")
 
@@ -92,5 +94,9 @@ def run_splatfacto(job_id: str, max_num_iterations: int) -> Path:
         "--output-dir",
         str(export_dir),
     ]
-    run_command(export_command, storage.job_logs_dir(job_id) / "splatfacto-export.log")
+    run_command(
+        export_command,
+        storage.job_logs_dir(job_id) / "splatfacto-export.log",
+        env=TORCH_CHECKPOINT_LOAD_ENV,
+    )
     return _exported_ply(export_dir)

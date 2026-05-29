@@ -1,9 +1,20 @@
+import os
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path
 
 
-def run_command(args: list[str], log_path: Path, cwd: Path | None = None) -> None:
+def run_command(
+    args: list[str],
+    log_path: Path,
+    cwd: Path | None = None,
+    env: Mapping[str, str] | None = None,
+) -> None:
     log_path.parent.mkdir(parents=True, exist_ok=True)
+    command_env = None
+    if env is not None:
+        command_env = os.environ.copy()
+        command_env.update(env)
 
     with log_path.open("w", encoding="utf-8") as log_file:
         log_file.write(f"COMMAND: {' '.join(args)}\n")
@@ -17,6 +28,7 @@ def run_command(args: list[str], log_path: Path, cwd: Path | None = None) -> Non
             text=True,
             encoding="utf-8",
             errors="replace",
+            env=command_env,
         )
 
         assert process.stdout is not None
@@ -29,4 +41,3 @@ def run_command(args: list[str], log_path: Path, cwd: Path | None = None) -> Non
 
     if exit_code != 0:
         raise RuntimeError(f"Command failed with exit code {exit_code}: {' '.join(args)}")
-

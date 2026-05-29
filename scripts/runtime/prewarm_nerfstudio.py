@@ -10,7 +10,13 @@ def main() -> None:
 
     import torch  # noqa: F401
     import nerfstudio  # noqa: F401
+    from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
     from tensorboard.backend.event_processing.event_accumulator import EventAccumulator  # noqa: F401
+
+    LearnedPerceptualImagePatchSimilarity(normalize=True)
+    lpips_checkpoint = cache_root / "torch" / "hub" / "checkpoints" / "alexnet-owt-7be5be79.pth"
+    if not lpips_checkpoint.exists():
+        raise RuntimeError(f"LPIPS AlexNet checkpoint was not cached: {lpips_checkpoint}")
 
     print("nerfstudio prewarm ok")
 

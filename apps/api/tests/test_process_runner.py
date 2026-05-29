@@ -31,3 +31,14 @@ def test_run_command_raises_on_failure_and_logs_exit_code(tmp_path):
     assert "bad" in text
     assert "EXIT_CODE: 7" in text
 
+
+def test_run_command_passes_extra_environment(tmp_path):
+    log_path = tmp_path / "env.log"
+
+    run_command(
+        ["powershell", "-NoProfile", "-Command", "Write-Output $env:THREE_DGS_TEST_FLAG"],
+        log_path,
+        env={"THREE_DGS_TEST_FLAG": "enabled"},
+    )
+
+    assert "enabled" in log_path.read_text(encoding="utf-8")

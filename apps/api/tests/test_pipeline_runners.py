@@ -24,12 +24,16 @@ def test_colmap_runner_uses_cuda_feature_and_matching(monkeypatch, tmp_path):
     colmap_runner.run_mapper("job_001")
 
     assert calls[0][1] == "feature_extractor"
-    assert "--SiftExtraction.use_gpu" in calls[0]
+    assert "--ImageReader.camera_model" in calls[0]
+    assert "--ImageReader.single_camera" in calls[0]
+    assert "--FeatureExtraction.use_gpu" in calls[0]
+    assert "--FeatureExtraction.gpu_index" in calls[0]
     assert "1" in calls[0]
     assert "--SiftExtraction.max_image_size" in calls[0]
     assert "2400" in calls[0]
     assert calls[1][1] == "sequential_matcher"
-    assert "--SiftMatching.use_gpu" in calls[1]
+    assert "--FeatureMatching.use_gpu" in calls[1]
+    assert "--FeatureMatching.gpu_index" in calls[1]
     assert "--SequentialMatching.overlap" in calls[1]
     assert calls[2][1] == "mapper"
     assert "--Mapper.ba_global_max_num_iterations" in calls[2]
