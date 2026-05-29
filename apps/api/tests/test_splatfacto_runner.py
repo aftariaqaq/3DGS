@@ -41,7 +41,7 @@ def test_run_splatfacto_uses_ns_train_and_ns_export(monkeypatch, tmp_path):
     assert calls[1][0][:2] == ["ns-train", "splatfacto"]
     assert "--data" in calls[1][0]
     assert "--max-num-iterations" in calls[1][0]
-    assert calls[1][0][calls[1][0].index("--vis") + 1] == "viewer+tensorboard"
+    assert calls[1][0][calls[1][0].index("--vis") + 1] == "tensorboard"
     assert calls[1][1] == "splatfacto.log"
     assert calls[2][0][:2] == ["ns-export", "gaussian-splat"]
     assert "--load-config" in calls[2][0]

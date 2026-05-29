@@ -81,7 +81,7 @@ def run_splatfacto(job_id: str, max_num_iterations: int) -> Path:
         "--max-num-iterations",
         str(max_num_iterations),
         "--vis",
-        "viewer+tensorboard",
+        "tensorboard",
     ]
     run_command(train_command, storage.job_logs_dir(job_id) / "splatfacto.log")
 
