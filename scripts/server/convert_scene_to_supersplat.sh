@@ -11,9 +11,18 @@ scene_id="${2:-scene_${job_id}}"
 repo_root="${REPO_ROOT:-/data/3dgs/repo}"
 node_image="${SUPERSPLAT_NODE_IMAGE:-node:22-bookworm}"
 node_mode="${SUPERSPLAT_NODE_MODE:-auto}"
+nvm_root="${SUPERSPLAT_NVM_ROOT:-/root/.nvm}"
+npm_cache="${SUPERSPLAT_NPM_CACHE:-/root/.npm}"
 scene_dir="${repo_root}/data/scenes/${scene_id}"
 export_dir="${repo_root}/data/jobs/${job_id}/nerfstudio/exports"
 source_ply="${export_dir}/splat.ply"
+host_node_bin="${SUPERSPLAT_NODE_BIN:-$(command -v node || true)}"
+host_npm_bin="${SUPERSPLAT_NPM_BIN:-$(command -v npm || true)}"
+host_node_prefix=""
+
+if [ -n "${host_node_bin}" ]; then
+  host_node_prefix="$(cd "$(dirname "${host_node_bin}")/.." && pwd)"
+fi
 
 if [ ! -f "${source_ply}" ]; then
   source_ply="$(find "${export_dir}" -maxdepth 1 -type f -name '*.ply' | sort | head -n 1 || true)"
@@ -34,6 +43,19 @@ run_splat_transform_host() {
   )
 }
 
+run_splat_transform_runtime_nvm() {
+  mkdir -p "${npm_cache}"
+
+  docker run --rm \
+    -e PATH="${host_node_prefix}/bin:/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    -v "${repo_root}:/workspace" \
+    -v "${nvm_root}:${nvm_root}:ro" \
+    -v "${npm_cache}:${npm_cache}" \
+    -w /workspace \
+    3dgs-runtime:rtx5090 \
+    npm exec --yes @playcanvas/splat-transform@2.4.0 -- "$@"
+}
+
 run_splat_transform_docker() {
   docker run --rm \
     -v "${repo_root}:/workspace" \
@@ -42,7 +64,42 @@ run_splat_transform_docker() {
     npm exec --yes @playcanvas/splat-transform@2.4.0 -- "$@"
 }
 
-if { [ "${node_mode}" = "auto" ] || [ "${node_mode}" = "host" ]; } && command -v npm >/dev/null 2>&1; then
+has_host_npm() {
+  [ -n "${host_npm_bin}" ] && [ -x "${host_npm_bin}" ]
+}
+
+has_runtime_nvm() {
+  has_host_npm && [ -n "${host_node_prefix}" ] && [ -d "${nvm_root}" ]
+}
+
+if [ "${node_mode}" = "runtime-nvm" ] && has_runtime_nvm; then
+  echo "Using 3dgs-runtime with mounted host nvm/npm for SuperSplat conversion"
+  run_splat_transform_runtime_nvm \
+    -w "/workspace/data/scenes/${scene_id}/source.ply" \
+    --filter-nan \
+    -r 180,0,0 \
+    "/workspace/data/scenes/${scene_id}/scene.sog"
+  run_splat_transform_runtime_nvm \
+    -w "/workspace/data/scenes/${scene_id}/source.ply" \
+    --filter-nan \
+    -r 180,0,0 \
+    "/workspace/data/scenes/${scene_id}/supersplat.html"
+elif [ "${node_mode}" = "runtime-nvm" ]; then
+  echo "SUPERSPLAT_NODE_MODE=runtime-nvm requested, but node/npm or ${nvm_root} was not found" >&2
+  exit 1
+elif [ "${node_mode}" = "auto" ] && has_runtime_nvm; then
+  echo "Using 3dgs-runtime with mounted host nvm/npm for SuperSplat conversion"
+  run_splat_transform_runtime_nvm \
+    -w "/workspace/data/scenes/${scene_id}/source.ply" \
+    --filter-nan \
+    -r 180,0,0 \
+    "/workspace/data/scenes/${scene_id}/scene.sog"
+  run_splat_transform_runtime_nvm \
+    -w "/workspace/data/scenes/${scene_id}/source.ply" \
+    --filter-nan \
+    -r 180,0,0 \
+    "/workspace/data/scenes/${scene_id}/supersplat.html"
+elif { [ "${node_mode}" = "auto" ] || [ "${node_mode}" = "host" ]; } && has_host_npm; then
   echo "Using host npm for SuperSplat conversion"
   run_splat_transform_host \
     -w "${scene_dir}/source.ply" \
