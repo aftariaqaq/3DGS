@@ -72,6 +72,8 @@ RUN apt-get update && \
     libmetis-dev \
     libsqlite3-dev \
     ninja-build \
+    nodejs \
+    npm \
     procps \
     python3 \
     python3-dev \

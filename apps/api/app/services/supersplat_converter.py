@@ -23,10 +23,17 @@ def convert_to_supersplat(source_ply: Path, target_dir: Path, log_path: Path) ->
         "-r",
         NERFSTUDIO_TO_SUPERSPLAT_ROTATION,
     ]
-    process_runner.run_command([*base_args, str(target_path)], log_path)
+    try:
+        process_runner.run_command([*base_args, str(target_path)], log_path)
 
-    viewer_path = target_dir / "supersplat.html"
-    process_runner.run_command([*base_args, str(viewer_path)], log_path)
+        viewer_path = target_dir / "supersplat.html"
+        process_runner.run_command([*base_args, str(viewer_path)], log_path)
+    except FileNotFoundError as exc:
+        command = _command_prefix()[0]
+        raise RuntimeError(
+            f"SuperSplat conversion command was not found: {command}. "
+            "Install Node/npm in the runtime image or set SPLAT_TRANSFORM_COMMAND."
+        ) from exc
 
     if not target_path.exists():
         raise RuntimeError(f"SuperSplat conversion did not create output: {target_path}")

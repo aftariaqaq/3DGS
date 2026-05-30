@@ -88,3 +88,16 @@ def test_convert_to_supersplat_allows_command_override(monkeypatch, tmp_path):
     supersplat_converter.convert_to_supersplat(source, target_dir, tmp_path / "convert.log")
 
     assert calls[0][0] == "splat-transform"
+
+
+def test_convert_to_supersplat_reports_missing_command(monkeypatch, tmp_path):
+    source = tmp_path / "splat.ply"
+    source.write_text("ply data", encoding="utf-8")
+
+    def fake_run_command(args, log, cwd=None, env=None):
+        raise FileNotFoundError("npx")
+
+    monkeypatch.setattr(supersplat_converter.process_runner, "run_command", fake_run_command)
+
+    with pytest.raises(RuntimeError, match="SuperSplat conversion command was not found"):
+        supersplat_converter.convert_to_supersplat(source, tmp_path / "scene", tmp_path / "convert.log")
