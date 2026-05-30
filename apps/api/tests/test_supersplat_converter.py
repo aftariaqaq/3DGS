@@ -27,9 +27,7 @@ def test_convert_to_supersplat_writes_sog_with_nerfstudio_rotation(monkeypatch, 
     assert output.read_text(encoding="utf-8") == "sog data"
     assert calls[0] == (
         [
-            "npx",
-            "--yes",
-            "@playcanvas/splat-transform@2.4.0",
+            "splat-transform",
             "-w",
             str(source),
             "--filter-nan",
@@ -43,9 +41,7 @@ def test_convert_to_supersplat_writes_sog_with_nerfstudio_rotation(monkeypatch, 
     )
     assert calls[1] == (
         [
-                "npx",
-                "--yes",
-                "@playcanvas/splat-transform@2.4.0",
+                "splat-transform",
                 "-w",
                 str(source),
                 "--filter-nan",

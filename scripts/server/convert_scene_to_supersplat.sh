@@ -9,6 +9,7 @@ fi
 job_id="$1"
 scene_id="${2:-scene_${job_id}}"
 repo_root="${REPO_ROOT:-/data/3dgs/repo}"
+runtime_image="${SUPERSPLAT_RUNTIME_IMAGE:-3dgs-runtime:rtx5090}"
 node_image="${SUPERSPLAT_NODE_IMAGE:-node:22-bookworm}"
 node_mode="${SUPERSPLAT_NODE_MODE:-auto}"
 default_npm_registries="https://registry.npmmirror.com https://mirrors.cloud.tencent.com/npm/ https://mirrors.huaweicloud.com/repository/npm/ https://registry.npmjs.org"
@@ -61,8 +62,19 @@ run_splat_transform_runtime_nvm() {
     -v "${nvm_root}:${nvm_root}:ro" \
     -v "${npm_cache}:${npm_cache}" \
     -w /workspace \
-    3dgs-runtime:rtx5090 \
+    "${runtime_image}" \
     npm exec --yes @playcanvas/splat-transform@2.4.0 -- "$@"
+}
+
+run_splat_transform_runtime_installed() {
+  # The built-in command is already installed in the runtime image; registry is unused.
+  shift
+
+  docker run --rm \
+    -v "${repo_root}:/workspace" \
+    -w /workspace \
+    "${runtime_image}" \
+    splat-transform "$@"
 }
 
 run_splat_transform_docker() {
@@ -83,6 +95,10 @@ has_host_npm() {
 
 has_runtime_nvm() {
   has_host_npm && [ -n "${host_node_prefix}" ] && [ -d "${nvm_root}" ]
+}
+
+has_runtime_installed() {
+  docker run --rm "${runtime_image}" sh -lc 'command -v splat-transform >/dev/null 2>&1' >/dev/null 2>&1
 }
 
 run_conversion_pair() {
@@ -117,7 +133,21 @@ run_conversion_pair() {
   return 1
 }
 
-if [ "${node_mode}" = "runtime-nvm" ] && has_runtime_nvm; then
+if [ "${node_mode}" = "runtime-installed" ]; then
+  echo "Using ${runtime_image} built-in splat-transform for SuperSplat conversion"
+  run_conversion_pair \
+    run_splat_transform_runtime_installed \
+    "/workspace/data/scenes/${scene_id}/source.ply" \
+    "/workspace/data/scenes/${scene_id}/scene.sog" \
+    "/workspace/data/scenes/${scene_id}/supersplat.html"
+elif [ "${node_mode}" = "auto" ] && has_runtime_installed; then
+  echo "Using ${runtime_image} built-in splat-transform for SuperSplat conversion"
+  run_conversion_pair \
+    run_splat_transform_runtime_installed \
+    "/workspace/data/scenes/${scene_id}/source.ply" \
+    "/workspace/data/scenes/${scene_id}/scene.sog" \
+    "/workspace/data/scenes/${scene_id}/supersplat.html"
+elif [ "${node_mode}" = "runtime-nvm" ] && has_runtime_nvm; then
   echo "Using 3dgs-runtime with mounted host nvm/npm for SuperSplat conversion"
   run_conversion_pair \
     run_splat_transform_runtime_nvm \
@@ -157,5 +187,5 @@ docker run --rm \
   -e PYTHONPATH=/workspace/apps/api \
   -v "${repo_root}:/workspace" \
   -w /workspace \
-  3dgs-runtime:rtx5090 \
+  "${runtime_image}" \
   python -c "import json; from datetime import datetime, timezone; from pathlib import Path; from app.models import JobStatus; from app.services import job_store; job_id='${job_id}'; scene_id='${scene_id}'; scene_dir=Path('/workspace/data/scenes') / scene_id; model_path=scene_dir / 'scene.sog'; source_path=scene_dir / 'source.ply'; job=job_store.read_job(job_id); stats={'model_size_bytes': model_path.stat().st_size, 'source_model_size_bytes': source_path.stat().st_size}; frame_count=job.get('frame_count') or job.get('max_frames'); stats.update({'frame_count': frame_count} if frame_count is not None else {}); scene={'id': scene_id, 'job_id': job_id, 'name': scene_id, 'model_type': 'sog', 'model_url': f'/static/scenes/{scene_id}/scene.sog', 'source_model_url': f'/static/scenes/{scene_id}/source.ply', 'viewer_url': f'/scenes/{scene_id}/supersplat', 'fallback_viewer_url': f'/scenes/{scene_id}/viewer', 'supersplat_viewer_url': f'/static/scenes/{scene_id}/supersplat.html', 'created_at': datetime.now(timezone.utc).isoformat(), 'stats': stats}; (scene_dir / 'metadata.json').write_text(json.dumps(scene, indent=2), encoding='utf-8'); job_store.update_status(job_id, JobStatus.EXPORTING_MODEL, stage='Converting SuperSplat scene'); job_store.mark_ready(job_id, scene_id, scene['model_url']); print(scene)"

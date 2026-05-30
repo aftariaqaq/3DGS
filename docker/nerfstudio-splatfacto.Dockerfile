@@ -6,6 +6,7 @@ ARG COLMAP_REPOSITORY=https://github.com/colmap/colmap.git
 ARG PIP_INDEX_URL=http://mirrors.aliyun.com/pypi/simple
 ARG PIP_TRUSTED_HOST=mirrors.aliyun.com mirror.nju.edu.cn mirror.sjtu.edu.cn download.pytorch.org pypi.org files.pythonhosted.org github.com release-assets.githubusercontent.com
 ARG TORCH_INDEX_URL=http://mirror.nju.edu.cn/pytorch/whl/cu128
+ARG NPM_REGISTRY=https://registry.npmmirror.com
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV VIRTUAL_ENV=/opt/venv
@@ -146,6 +147,8 @@ RUN colmap -h 2>&1 | tee /tmp/colmap-help.txt && ! grep -qi "without CUDA" /tmp/
 RUN ns-train splatfacto --help >/tmp/ns-train-splatfacto-help.txt
 RUN ns-export gaussian-splat --help >/tmp/ns-export-gaussian-splat-help.txt
 RUN ns-process-data images --help >/tmp/ns-process-data-images-help.txt
+RUN npm install -g --registry="${NPM_REGISTRY}" @playcanvas/splat-transform@2.4.0 && \
+    splat-transform --version >/tmp/splat-transform-version.txt
 COPY scripts/runtime/prewarm_nerfstudio.py /opt/3dgs/prewarm_nerfstudio.py
 RUN python /opt/3dgs/prewarm_nerfstudio.py
 RUN test -f /opt/3dgs-cache/torch/hub/checkpoints/alexnet-owt-7be5be79.pth

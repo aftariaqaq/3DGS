@@ -4,7 +4,7 @@ from pathlib import Path
 
 from app.services import process_runner
 
-DEFAULT_SPLAT_TRANSFORM_COMMAND = "npx --yes @playcanvas/splat-transform@2.4.0"
+DEFAULT_SPLAT_TRANSFORM_COMMAND = "splat-transform"
 NERFSTUDIO_TO_SUPERSPLAT_ROTATION = "180,0,0"
 
 
@@ -32,7 +32,7 @@ def convert_to_supersplat(source_ply: Path, target_dir: Path, log_path: Path) ->
         command = _command_prefix()[0]
         raise RuntimeError(
             f"SuperSplat conversion command was not found: {command}. "
-            "Install Node/npm in the runtime image or set SPLAT_TRANSFORM_COMMAND."
+            "Install @playcanvas/splat-transform in the runtime image or set SPLAT_TRANSFORM_COMMAND."
         ) from exc
 
     if not target_path.exists():
