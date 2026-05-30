@@ -11,6 +11,7 @@ scene_id="${2:-scene_${job_id}}"
 repo_root="${REPO_ROOT:-/data/3dgs/repo}"
 node_image="${SUPERSPLAT_NODE_IMAGE:-node:22-bookworm}"
 node_mode="${SUPERSPLAT_NODE_MODE:-auto}"
+npm_registry="${SUPERSPLAT_NPM_REGISTRY:-https://registry.npmmirror.com}"
 nvm_root="${SUPERSPLAT_NVM_ROOT:-/root/.nvm}"
 npm_cache="${SUPERSPLAT_NPM_CACHE:-/root/.npm}"
 scene_dir="${repo_root}/data/scenes/${scene_id}"
@@ -39,7 +40,7 @@ cp -f "${source_ply}" "${scene_dir}/source.ply"
 run_splat_transform_host() {
   (
     cd "${repo_root}"
-    npm exec --yes @playcanvas/splat-transform@2.4.0 -- "$@"
+    npm_config_registry="${npm_registry}" npm exec --yes @playcanvas/splat-transform@2.4.0 -- "$@"
   )
 }
 
@@ -48,6 +49,7 @@ run_splat_transform_runtime_nvm() {
 
   docker run --rm \
     -e PATH="${host_node_prefix}/bin:/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    -e npm_config_registry="${npm_registry}" \
     -v "${repo_root}:/workspace" \
     -v "${nvm_root}:${nvm_root}:ro" \
     -v "${npm_cache}:${npm_cache}" \
@@ -59,6 +61,7 @@ run_splat_transform_runtime_nvm() {
 run_splat_transform_docker() {
   docker run --rm \
     -v "${repo_root}:/workspace" \
+    -e npm_config_registry="${npm_registry}" \
     -w /workspace \
     "${node_image}" \
     npm exec --yes @playcanvas/splat-transform@2.4.0 -- "$@"
