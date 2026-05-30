@@ -84,4 +84,29 @@ def test_scene_viewer_serves_webgl_html(monkeypatch, tmp_path):
     assert "/static/scenes/scene_001/scene.ply" in response.text
     assert "@mkkellogg/gaussian-splats-3d@0.4.7" in response.text
     assert "GaussianSplats3D.Viewer" in response.text
+    assert "cameraUp: [0, 1, 0]" in response.text
+    assert "initialCameraLookAt: [0, 0, 0]" in response.text
+    assert "gpuAcceleratedSort: true" in response.text
+    assert "progressiveLoad: true" in response.text
+    assert "position: [0, 0, 0]" in response.text
+    assert "nerfstudio: { rotation: [1, 0, 0, 0] }" in response.text
+    assert 'data-orientation="raw"' in response.text
     assert 'id="viewer-root"' in response.text
+
+
+def test_supersplat_viewer_serves_offline_converted_scene(monkeypatch, tmp_path):
+    configure_tmp_storage(monkeypatch, tmp_path)
+    storage.SCENES_DIR.mkdir(parents=True)
+    scene_dir = storage.SCENES_DIR / "scene_001"
+    scene_dir.mkdir()
+    (scene_dir / "metadata.json").write_text(
+        '{"id":"scene_001","model_url":"/static/scenes/scene_001/scene.sog","model_type":"sog","supersplat_viewer_url":"/static/scenes/scene_001/supersplat.html"}',
+        encoding="utf-8",
+    )
+
+    response = TestClient(app).get("/scenes/scene_001/supersplat")
+
+    assert response.status_code == 200
+    assert "SuperSplat Viewer" in response.text
+    assert "/static/scenes/scene_001/supersplat.html" in response.text
+    assert "No browser-side conversion is performed" in response.text

@@ -345,7 +345,7 @@ def get_job_colmap_view(job_id: str) -> str:
 @router.get("/scenes/{scene_id}/viewer", response_class=HTMLResponse)
 def get_scene_viewer(scene_id: str) -> str:
     scene = scene_store.read_scene(scene_id)
-    model_url = scene["model_url"]
+    model_url = scene.get("source_model_url", scene["model_url"])
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -452,6 +452,26 @@ def get_scene_viewer(scene_id: str) -> str:
       margin: 0;
       color: #9da8b8;
     }}
+    .orientation {{
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      padding: 0 14px 14px;
+    }}
+    .orientation button {{
+      border: 1px solid #3a4555;
+      border-radius: 6px;
+      background: rgba(31, 38, 50, 0.9);
+      color: #cbd4e3;
+      padding: 7px 6px;
+      font: inherit;
+      cursor: pointer;
+    }}
+    .orientation button.active {{
+      border-color: #78b7ff;
+      color: #ffffff;
+      background: rgba(70, 124, 190, 0.42);
+    }}
     .error {{
       color: #ffb4b4;
       border-color: rgba(255, 100, 100, 0.45);
@@ -473,6 +493,11 @@ def get_scene_viewer(scene_id: str) -> str:
         <dt>Right Drag</dt><dd>Pan</dd>
         <dt>Space</dt><dd>Reset</dd>
       </dl>
+      <div class="orientation">
+        <button type="button" data-orientation="nerfstudio">Upright</button>
+        <button type="button" data-orientation="raw">Raw</button>
+        <button type="button" data-orientation="roll180">Roll 180</button>
+      </div>
     </section>
     <div class="status" id="status">Loading Gaussian splats...</div>
   </main>
@@ -482,15 +507,32 @@ def get_scene_viewer(scene_id: str) -> str:
     const modelUrl = "{model_url}";
     const root = document.getElementById("viewer-root");
     const statusEl = document.getElementById("status");
+    const orientationPresets = {{
+      nerfstudio: {{ rotation: [1, 0, 0, 0] }},
+      raw: {{ rotation: [0, 0, 0, 1] }},
+      roll180: {{ rotation: [0, 0, 1, 0] }}
+    }};
+    const params = new URLSearchParams(window.location.search);
+    const orientation = orientationPresets[params.get("orientation")] ? params.get("orientation") : "nerfstudio";
+    const preset = orientationPresets[orientation];
+
+    document.querySelectorAll("[data-orientation]").forEach(button => {{
+      button.classList.toggle("active", button.dataset.orientation === orientation);
+      button.addEventListener("click", () => {{
+        const next = new URL(window.location.href);
+        next.searchParams.set("orientation", button.dataset.orientation);
+        window.location.href = next.toString();
+      }});
+    }});
 
     async function main() {{
       const viewer = new GaussianSplats3D.Viewer({{
         rootElement: root,
-        cameraUp: [0, -1, -0.6],
-        initialCameraPosition: [-1, -4, 6],
-        initialCameraLookAt: [0, 4, 0],
+        cameraUp: [0, 1, 0],
+        initialCameraPosition: [0, -4, 2],
+        initialCameraLookAt: [0, 0, 0],
         sharedMemoryForWorkers: false,
-        gpuAcceleratedSort: false,
+        gpuAcceleratedSort: true,
         useBuiltInControls: true
       }});
 
@@ -498,10 +540,10 @@ def get_scene_viewer(scene_id: str) -> str:
         format: GaussianSplats3D.SceneFormat.Ply,
         splatAlphaRemovalThreshold: 5,
         showLoadingUI: true,
-        progressiveLoad: false,
-        position: [0, 1, 0],
-        rotation: [0, 0, 0, 1],
-        scale: [1.5, 1.5, 1.5]
+        progressiveLoad: true,
+        position: [0, 0, 0],
+        rotation: preset.rotation,
+        scale: [1, 1, 1]
       }});
       viewer.start();
       statusEl.textContent = `Loaded Gaussian splats from ${{modelUrl}}`;
@@ -513,5 +555,91 @@ def get_scene_viewer(scene_id: str) -> str:
       statusEl.textContent = error.message;
     }});
   </script>
+</body>
+</html>"""
+
+
+@router.get("/scenes/{scene_id}/supersplat", response_class=HTMLResponse)
+def get_supersplat_viewer(scene_id: str) -> str:
+    scene = scene_store.read_scene(scene_id)
+    viewer_url = scene.get("supersplat_viewer_url", f"/static/scenes/{scene_id}/supersplat.html")
+    fallback_url = scene.get("fallback_viewer_url", f"/scenes/{scene_id}/viewer")
+    model_url = scene["model_url"]
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SuperSplat Viewer - {scene_id}</title>
+  <style>
+    :root {{
+      color-scheme: dark;
+      font-family: Inter, Segoe UI, Arial, sans-serif;
+      background: #101216;
+      color: #e8ecf3;
+    }}
+    * {{
+      box-sizing: border-box;
+    }}
+    body {{
+      margin: 0;
+      min-height: 100vh;
+      overflow: hidden;
+      background: #101216;
+    }}
+    header {{
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 3;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 0 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(16, 18, 22, 0.86);
+      backdrop-filter: blur(10px);
+    }}
+    h1 {{
+      margin: 0;
+      font-size: 15px;
+      font-weight: 650;
+    }}
+    .meta, a {{
+      color: #c1cad8;
+      font-size: 12px;
+    }}
+    iframe {{
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      border: 0;
+      background: #05070a;
+    }}
+    .status {{
+      position: fixed;
+      left: 16px;
+      bottom: 16px;
+      z-index: 3;
+      padding: 8px 10px;
+      border: 1px solid #344052;
+      border-radius: 6px;
+      background: rgba(16, 18, 22, 0.82);
+      color: #c7d0df;
+      font-size: 12px;
+    }}
+  </style>
+</head>
+<body>
+  <iframe src="{viewer_url}" title="SuperSplat Viewer"></iframe>
+  <header>
+    <h1>SuperSplat Viewer</h1>
+    <div class="meta">Scene: <strong>{scene_id}</strong> · <a href="{fallback_url}">fallback viewer</a></div>
+  </header>
+  <div class="status">No browser-side conversion is performed. Loaded converted model: {model_url}</div>
 </body>
 </html>"""
