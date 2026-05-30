@@ -10,6 +10,7 @@ job_id="$1"
 scene_id="${2:-scene_${job_id}}"
 repo_root="${REPO_ROOT:-/data/3dgs/repo}"
 node_image="${SUPERSPLAT_NODE_IMAGE:-node:22-bookworm}"
+node_mode="${SUPERSPLAT_NODE_MODE:-auto}"
 scene_dir="${repo_root}/data/scenes/${scene_id}"
 export_dir="${repo_root}/data/jobs/${job_id}/nerfstudio/exports"
 source_ply="${export_dir}/splat.ply"
@@ -26,22 +27,49 @@ fi
 mkdir -p "${scene_dir}"
 cp -f "${source_ply}" "${scene_dir}/source.ply"
 
-docker run --rm \
-  -v "${repo_root}:/workspace" \
-  -w /workspace \
-  "${node_image}" \
-  bash -lc "set -euo pipefail
-    npm exec --yes @playcanvas/splat-transform@2.4.0 -- \
-      -w /workspace/data/scenes/${scene_id}/source.ply \
-      --filter-nan \
-      -r 180,0,0 \
-      /workspace/data/scenes/${scene_id}/scene.sog
-    npm exec --yes @playcanvas/splat-transform@2.4.0 -- \
-      -w /workspace/data/scenes/${scene_id}/source.ply \
-      --filter-nan \
-      -r 180,0,0 \
-      /workspace/data/scenes/${scene_id}/supersplat.html
-  "
+run_splat_transform_host() {
+  (
+    cd "${repo_root}"
+    npm exec --yes @playcanvas/splat-transform@2.4.0 -- "$@"
+  )
+}
+
+run_splat_transform_docker() {
+  docker run --rm \
+    -v "${repo_root}:/workspace" \
+    -w /workspace \
+    "${node_image}" \
+    npm exec --yes @playcanvas/splat-transform@2.4.0 -- "$@"
+}
+
+if { [ "${node_mode}" = "auto" ] || [ "${node_mode}" = "host" ]; } && command -v npm >/dev/null 2>&1; then
+  echo "Using host npm for SuperSplat conversion"
+  run_splat_transform_host \
+    -w "${scene_dir}/source.ply" \
+    --filter-nan \
+    -r 180,0,0 \
+    "${scene_dir}/scene.sog"
+  run_splat_transform_host \
+    -w "${scene_dir}/source.ply" \
+    --filter-nan \
+    -r 180,0,0 \
+    "${scene_dir}/supersplat.html"
+elif [ "${node_mode}" = "host" ]; then
+  echo "SUPERSPLAT_NODE_MODE=host requested, but npm was not found on PATH" >&2
+  exit 1
+else
+  echo "Using Docker image ${node_image} for SuperSplat conversion"
+  run_splat_transform_docker \
+    -w "/workspace/data/scenes/${scene_id}/source.ply" \
+    --filter-nan \
+    -r 180,0,0 \
+    "/workspace/data/scenes/${scene_id}/scene.sog"
+  run_splat_transform_docker \
+    -w "/workspace/data/scenes/${scene_id}/source.ply" \
+    --filter-nan \
+    -r 180,0,0 \
+    "/workspace/data/scenes/${scene_id}/supersplat.html"
+fi
 
 docker run --rm \
   -e PYTHONPATH=/workspace/apps/api \
